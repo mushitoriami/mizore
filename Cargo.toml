@@ -1,0 +1,8 @@
+[package]
+name = "mizore"
+version = "0.0.1"
+edition = "2024"
+description = "A static analyzer that verifies Python asserts before execution"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/mushitoriami/mizore"
