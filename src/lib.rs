@@ -87,6 +87,15 @@ fn check_assert(_facts: &[Term], assert: &Term) -> bool {
     }
 }
 
+fn update_facts(facts: &mut Vec<Term>, assert: Term) {
+    match assert {
+        Term::Compound(label, mut args) if label == "Assert" =>  {
+            facts.push(args.pop().unwrap())
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,5 +183,20 @@ mod tests {
             check_assert(&[], &source_stmt_to_term("assert(2 == 3)").unwrap()),
             false
         )
+    }
+
+    #[test]
+    fn test_update_facts_1() {
+        let mut facts = Vec::new();
+        update_facts(&mut facts, source_stmt_to_term("assert(2 == 3)").unwrap());
+        assert_eq!(facts, vec![source_expr_to_term("2 == 3").unwrap()]);
+        update_facts(&mut facts, source_stmt_to_term("assert(2 == 2)").unwrap());
+        assert_eq!(
+            facts,
+            vec![
+                source_expr_to_term("2 == 3").unwrap(),
+                source_expr_to_term("2 == 2").unwrap()
+            ]
+        );
     }
 }
