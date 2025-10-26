@@ -77,6 +77,16 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
     }
 }
 
+fn check_assert(_facts: &[Term], assert: &Term) -> bool {
+    match assert {
+        Term::Compound(label, args) if label == "Assert" => match args.as_slice() {
+            [term] => evaluate_term_bool(term).is_some_and(|x| x),
+            _ => unimplemented!(),
+        },
+        _ => true,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,6 +157,22 @@ mod tests {
         assert_eq!(
             source_expr_to_term("2 == 3").map(|x| evaluate_term_bool(&x)),
             Some(Some(false))
+        )
+    }
+
+    #[test]
+    fn test_check_assert_1() {
+        assert_eq!(
+            check_assert(&[], &source_stmt_to_term("assert(2 == 2)").unwrap()),
+            true
+        )
+    }
+
+    #[test]
+    fn test_check_assert_2() {
+        assert_eq!(
+            check_assert(&[], &source_stmt_to_term("assert(2 == 3)").unwrap()),
+            false
         )
     }
 }
