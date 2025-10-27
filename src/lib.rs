@@ -80,15 +80,18 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
     }
 }
 
-fn verify_assert(_facts: &[Rule], assert: &Rule) -> bool {
-    match assert {
-        Rule::Rule(_, head, body) if body.is_empty() => evaluate_term_bool(head).unwrap(),
-        _ => false,
+fn verify_assert(_facts: &[Rule], stmt: &Stmt) -> bool {
+    match assert_to_rule(stmt) {
+        Some(Rule::Rule(_, head, body)) if body.is_empty() => evaluate_term_bool(&head).unwrap(),
+        Some(_) => false,
+        _ => true,
     }
 }
 
-fn update_facts(facts: &mut Vec<Rule>, assert: Rule) {
-    facts.push(assert)
+fn update_facts(facts: &mut Vec<Rule>, stmt: &Stmt) {
+    if let Some(rule) = assert_to_rule(stmt) {
+        facts.push(rule)
+    }
 }
 
 #[cfg(test)]
@@ -206,15 +209,13 @@ mod tests {
     #[test]
     fn test_verify_assert_1() {
         let stmt = source_to_stmt("assert(2 == 2)").unwrap();
-        let rule = assert_to_rule(&stmt).unwrap();
-        assert_eq!(verify_assert(&[], &rule), true)
+        assert_eq!(verify_assert(&[], &stmt), true)
     }
 
     #[test]
     fn test_verify_assert_2() {
         let stmt = source_to_stmt("assert(2 == 3)").unwrap();
-        let rule = assert_to_rule(&stmt).unwrap();
-        assert_eq!(verify_assert(&[], &rule), false)
+        assert_eq!(verify_assert(&[], &stmt), false)
     }
 
     #[test]
@@ -222,14 +223,14 @@ mod tests {
         let stmt = source_to_stmt("assert(2 == 3)").unwrap();
         let stmt_2 = source_to_stmt("assert(2 == 2)").unwrap();
         let mut facts = Vec::new();
-        update_facts(&mut facts, assert_to_rule(&stmt).unwrap());
+        update_facts(&mut facts, &stmt);
         assert_eq!(facts, vec![assert_to_rule(&stmt).unwrap()]);
-        update_facts(&mut facts, assert_to_rule(&stmt_2).unwrap());
+        update_facts(&mut facts, &stmt_2);
         assert_eq!(
             facts,
             vec![
                 assert_to_rule(&stmt).unwrap(),
-                assert_to_rule(&stmt_2).unwrap(),
+                assert_to_rule(&stmt_2).unwrap()
             ]
         );
     }
