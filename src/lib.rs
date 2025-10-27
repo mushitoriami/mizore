@@ -1,6 +1,6 @@
 use cosp::Term;
-use ruff_python_ast::{Expr, Number};
-use ruff_python_parser::parse_expression;
+use ruff_python_ast::{Expr, Number, Stmt};
+use ruff_python_parser::{parse_expression, parse_module};
 
 fn expr_to_term(expr: &Expr) -> Option<Term> {
     match expr {
@@ -31,9 +31,24 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
     }
 }
 
+fn stmt_to_term(stmt: &Stmt) -> Option<Term> {
+    match stmt {
+        Stmt::Assert(ast) => Some(Term::Compound(
+            "Assert".into(),
+            vec![expr_to_term(&ast.test)?],
+        )),
+        _ => None,
+    }
+}
+
 fn source_expr_to_term(source: &str) -> Option<Term> {
     let parsed = parse_expression(source).ok()?;
     expr_to_term(&parsed.into_expr())
+}
+
+fn source_stmt_to_term(source: &str) -> Option<Term> {
+    let parsed = parse_module(source).ok()?;
+    stmt_to_term(&parsed.into_suite()[0])
 }
 
 fn evaluate_term_i64(term: &Term) -> Option<i64> {
@@ -81,6 +96,30 @@ mod tests {
                         vec![Term::Constant("Int".into()), Term::Constant("3".into())]
                     )
                 ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_stmt_to_term_1() {
+        assert_eq!(
+            source_stmt_to_term("assert(2 == 4)\n"),
+            Some(Term::Compound(
+                "Assert".into(),
+                vec![Term::Compound(
+                    "Compare".into(),
+                    vec![
+                        Term::Constant("==".into()),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                        ),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                        )
+                    ]
+                )]
             ))
         )
     }
