@@ -34,6 +34,14 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
 fn assert_to_rule(assert: &Stmt) -> Option<Rule> {
     match assert {
         Stmt::Assert(ast) => Some(Rule::Rule(2, expr_to_term(&ast.test)?, Vec::new())),
+        Stmt::If(ast) => match ast.body.as_slice() {
+            [Stmt::Assert(ast_assert)] => Some(Rule::Rule(
+                2,
+                expr_to_term(&ast.test)?,
+                vec![expr_to_term(&ast_assert.test)?],
+            )),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -129,6 +137,44 @@ mod tests {
                     ]
                 ),
                 Vec::new()
+            ))
+        )
+    }
+
+    #[test]
+    fn test_assert_to_rule_2() {
+        assert_eq!(
+            source_assert_to_rule("if 2 == 3:\n    assert(2 == 4)\n"),
+            Some(Rule::Rule(
+                2,
+                Term::Compound(
+                    "Compare".into(),
+                    vec![
+                        Term::Constant("==".into()),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                        ),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                        )
+                    ]
+                ),
+                vec![Term::Compound(
+                    "Compare".into(),
+                    vec![
+                        Term::Constant("==".into()),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                        ),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                        )
+                    ]
+                ),]
             ))
         )
     }
