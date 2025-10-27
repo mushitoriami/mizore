@@ -38,6 +38,10 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
             )),
             _ => None,
         },
+        Expr::Name(ast) => Some(Term::Compound(
+            "Variable".into(),
+            vec![Term::Constant(ast.id.to_string())],
+        )),
         _ => None,
     }
 }
@@ -73,7 +77,7 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
     match term {
         Term::Compound(label, args) if label == "Compare" => match args.as_slice() {
             [Term::Constant(label), left, right] if label == "==" => {
-                Some(evaluate_term_i64(left).unwrap() == evaluate_term_i64(right).unwrap())
+                Some(evaluate_term_i64(left)? == evaluate_term_i64(right)?)
             }
             _ => None,
         },
@@ -126,6 +130,24 @@ mod tests {
                         "Literal".into(),
                         vec![Term::Constant("Int".into()), Term::Constant("2".into())]
                     ),
+                    Term::Compound(
+                        "Literal".into(),
+                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                    )
+                ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_expr_to_term_2() {
+        assert_eq!(
+            source_expr_to_term("x == 3"),
+            Some(Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant("==".into()),
+                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
                     Term::Compound(
                         "Literal".into(),
                         vec![Term::Constant("Int".into()), Term::Constant("3".into())]
@@ -207,6 +229,14 @@ mod tests {
     }
 
     #[test]
+    fn test_evaluate_term_i64_2() {
+        assert_eq!(
+            source_expr_to_term("x").map(|x| evaluate_term_i64(&x)),
+            Some(None)
+        )
+    }
+
+    #[test]
     fn test_evaluate_term_bool_1() {
         assert_eq!(
             expr_to_term(&source_to_expr("2 == 2").unwrap()).map(|x| evaluate_term_bool(&x)),
@@ -219,6 +249,14 @@ mod tests {
         assert_eq!(
             expr_to_term(&source_to_expr("2 == 3").unwrap()).map(|x| evaluate_term_bool(&x)),
             Some(Some(false))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_3() {
+        assert_eq!(
+            source_expr_to_term("x == 3").map(|x| evaluate_term_bool(&x)),
+            Some(None)
         )
     }
 
