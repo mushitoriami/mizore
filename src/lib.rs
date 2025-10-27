@@ -38,8 +38,8 @@ fn source_expr_to_term(source: &str) -> Option<Term> {
 
 fn evaluate_term_i64(term: &Term) -> Option<i64> {
     match term {
-        Term::Compound(literal, vector) if literal == "Literal" => match vector.as_slice() {
-            [Term::Constant(int), Term::Constant(value)] if int == "Int" => {
+        Term::Compound(label, args) if label == "Literal" => match args.as_slice() {
+            [Term::Constant(label), Term::Constant(value)] if label == "Int" => {
                 Some(value.parse().unwrap())
             }
             _ => None,
@@ -50,11 +50,9 @@ fn evaluate_term_i64(term: &Term) -> Option<i64> {
 
 fn evaluate_term_bool(term: &Term) -> Option<bool> {
     match term {
-        Term::Compound(compare, vector) if compare == "Compare" => match vector.as_slice() {
-            [Term::Constant(op), left, right] if op == "==" => {
-                let left = evaluate_term_i64(left).unwrap();
-                let right = evaluate_term_i64(right).unwrap();
-                Some(left == right)
+        Term::Compound(label, args) if label == "Compare" => match args.as_slice() {
+            [Term::Constant(label), left, right] if label == "==" => {
+                Some(evaluate_term_i64(left).unwrap() == evaluate_term_i64(right).unwrap())
             }
             _ => None,
         },
