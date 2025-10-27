@@ -1,6 +1,7 @@
 use cosp::{Rule, Term};
 use ruff_python_ast::{Expr, Number, Stmt};
 use ruff_python_parser::{parse_expression, parse_module};
+use ruff_text_size::{Ranged, TextRange, TextSize};
 
 fn source_to_expr(source: &str) -> Option<Expr> {
     let parsed = parse_expression(source).unwrap();
@@ -92,6 +93,21 @@ fn update_facts(facts: &mut Vec<Rule>, stmt: &Stmt) {
     if let Some(rule) = assert_to_rule(stmt) {
         facts.push(rule)
     }
+}
+
+fn verify_function(function: &Stmt) -> Vec<TextRange> {
+    let Stmt::FunctionDef(ast) = function else {
+        panic!()
+    };
+    let mut errs: Vec<TextRange> = Vec::new();
+    let mut facts: Vec<Rule> = Vec::new();
+    for stmt in &ast.body {
+        if !verify_assert(&facts, &stmt) {
+            errs.push(stmt.range());
+        }
+        update_facts(&mut facts, &stmt);
+    }
+    errs
 }
 
 #[cfg(test)]
@@ -232,6 +248,19 @@ mod tests {
                 assert_to_rule(&stmt).unwrap(),
                 assert_to_rule(&stmt_2).unwrap()
             ]
+        );
+    }
+
+    #[test]
+    fn test_verify_function_1() {
+        let source = r#"
+def test_function():
+    assert(2 == 3)
+    assert(2 == 2)
+"#;
+        assert_eq!(
+            verify_function(&source_to_stmt(source).unwrap()),
+            vec![TextRange::new(TextSize::new(26), TextSize::new(40))]
         );
     }
 }

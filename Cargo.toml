@@ -11,3 +11,4 @@ repository = "https://github.com/mushitoriami/mizore"
 cosp = "0.1.0"
 ruff_python_ast = { git = "https://github.com/astral-sh/ruff", tag = "0.14.1" }
 ruff_python_parser = { git = "https://github.com/astral-sh/ruff", tag = "0.14.1" }
+ruff_text_size = { git = "https://github.com/astral-sh/ruff", tag = "0.14.1" }
