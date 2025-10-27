@@ -36,6 +36,30 @@ fn source_expr_to_term(source: &str) -> Option<Term> {
     expr_to_term(&parsed.into_expr())
 }
 
+fn evaluate_term_i64(term: &Term) -> Option<i64> {
+    match term {
+        Term::Compound(label, args) if label == "Literal" => match args.as_slice() {
+            [Term::Constant(label), Term::Constant(value)] if label == "Int" => {
+                Some(value.parse().unwrap())
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn evaluate_term_bool(term: &Term) -> Option<bool> {
+    match term {
+        Term::Compound(label, args) if label == "Compare" => match args.as_slice() {
+            [Term::Constant(label), left, right] if label == "==" => {
+                Some(evaluate_term_i64(left).unwrap() == evaluate_term_i64(right).unwrap())
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -58,6 +82,30 @@ mod tests {
                     )
                 ]
             ))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_i64_1() {
+        assert_eq!(
+            source_expr_to_term("2").map(|x| evaluate_term_i64(&x)),
+            Some(Some(2))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_1() {
+        assert_eq!(
+            source_expr_to_term("2 == 2").map(|x| evaluate_term_bool(&x)),
+            Some(Some(true))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_2() {
+        assert_eq!(
+            source_expr_to_term("2 == 3").map(|x| evaluate_term_bool(&x)),
+            Some(Some(false))
         )
     }
 }
