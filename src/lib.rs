@@ -80,7 +80,7 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
     }
 }
 
-fn check_assert(_facts: &[Rule], assert: &Rule) -> bool {
+fn verify_assert(_facts: &[Rule], assert: &Rule) -> bool {
     match assert {
         Rule::Rule(_, head, body) if body.is_empty() => evaluate_term_bool(head).unwrap(),
         _ => false,
@@ -204,9 +204,9 @@ mod tests {
     }
 
     #[test]
-    fn test_check_assert_1() {
+    fn test_verify_assert_1() {
         assert_eq!(
-            check_assert(
+            verify_assert(
                 &[],
                 &Rule::Rule(2, source_expr_to_term("2 == 2").unwrap(), Vec::new())
             ),
@@ -215,9 +215,9 @@ mod tests {
     }
 
     #[test]
-    fn test_check_assert_2() {
+    fn test_verify_assert_2() {
         assert_eq!(
-            check_assert(
+            verify_assert(
                 &[],
                 &Rule::Rule(2, source_expr_to_term("2 == 3").unwrap(), Vec::new())
             ),
