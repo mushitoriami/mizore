@@ -1,4 +1,4 @@
-use cosp::Term;
+use cosp::{Rule, Term};
 use ruff_python_ast::{Expr, Number, Stmt};
 use ruff_python_parser::{parse_expression, parse_module};
 
@@ -31,12 +31,17 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
     }
 }
 
-fn stmt_to_term(stmt: &Stmt) -> Option<Term> {
-    match stmt {
-        Stmt::Assert(ast) => Some(Term::Compound(
-            "Assert".into(),
-            vec![expr_to_term(&ast.test)?],
-        )),
+fn assert_to_rule(assert: &Stmt) -> Option<Rule> {
+    match assert {
+        Stmt::Assert(ast) => Some(Rule::Rule(2, expr_to_term(&ast.test)?, Vec::new())),
+        Stmt::If(ast) => match ast.body.as_slice() {
+            [Stmt::Assert(ast_assert)] => Some(Rule::Rule(
+                2,
+                expr_to_term(&ast_assert.test)?,
+                vec![expr_to_term(&ast.test)?],
+            )),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -46,9 +51,9 @@ fn source_expr_to_term(source: &str) -> Option<Term> {
     expr_to_term(&parsed.into_expr())
 }
 
-fn source_stmt_to_term(source: &str) -> Option<Term> {
+fn source_assert_to_rule(source: &str) -> Option<Rule> {
     let parsed = parse_module(source).ok()?;
-    stmt_to_term(&parsed.into_suite()[0])
+    assert_to_rule(&parsed.into_suite()[0])
 }
 
 fn evaluate_term_i64(term: &Term) -> Option<i64> {
@@ -75,23 +80,15 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
     }
 }
 
-fn check_assert(_facts: &[Term], assert: &Term) -> bool {
+fn check_assert(_facts: &[Rule], assert: &Rule) -> bool {
     match assert {
-        Term::Compound(label, args) if label == "Assert" => match args.as_slice() {
-            [term] => evaluate_term_bool(term).is_some_and(|x| x),
-            _ => unimplemented!(),
-        },
-        _ => true,
+        Rule::Rule(_, head, body) if body.is_empty() => evaluate_term_bool(head).unwrap(),
+        _ => false,
     }
 }
 
-fn update_facts(facts: &mut Vec<Term>, assert: Term) {
-    match assert {
-        Term::Compound(label, mut args) if label == "Assert" =>  {
-            facts.push(args.pop().unwrap())
-        }
-        _ => {}
-    }
+fn update_facts(facts: &mut Vec<Rule>, assert: Rule) {
+    facts.push(assert)
 }
 
 #[cfg(test)]
@@ -120,12 +117,12 @@ mod tests {
     }
 
     #[test]
-    fn test_stmt_to_term_1() {
+    fn test_assert_to_rule_1() {
         assert_eq!(
-            source_stmt_to_term("assert(2 == 4)\n"),
-            Some(Term::Compound(
-                "Assert".into(),
-                vec![Term::Compound(
+            source_assert_to_rule("assert(2 == 4)\n"),
+            Some(Rule::Rule(
+                2,
+                Term::Compound(
                     "Compare".into(),
                     vec![
                         Term::Constant("==".into()),
@@ -138,7 +135,46 @@ mod tests {
                             vec![Term::Constant("Int".into()), Term::Constant("4".into())]
                         )
                     ]
-                )]
+                ),
+                Vec::new()
+            ))
+        )
+    }
+
+    #[test]
+    fn test_assert_to_rule_2() {
+        assert_eq!(
+            source_assert_to_rule("if 2 == 3:\n    assert(2 == 4)\n"),
+            Some(Rule::Rule(
+                2,
+                Term::Compound(
+                    "Compare".into(),
+                    vec![
+                        Term::Constant("==".into()),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                        ),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                        )
+                    ]
+                ),
+                vec![Term::Compound(
+                    "Compare".into(),
+                    vec![
+                        Term::Constant("==".into()),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                        ),
+                        Term::Compound(
+                            "Literal".into(),
+                            vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                        )
+                    ]
+                ),]
             ))
         )
     }
@@ -170,7 +206,10 @@ mod tests {
     #[test]
     fn test_check_assert_1() {
         assert_eq!(
-            check_assert(&[], &source_stmt_to_term("assert(2 == 2)").unwrap()),
+            check_assert(
+                &[],
+                &Rule::Rule(2, source_expr_to_term("2 == 2").unwrap(), Vec::new())
+            ),
             true
         )
     }
@@ -178,7 +217,10 @@ mod tests {
     #[test]
     fn test_check_assert_2() {
         assert_eq!(
-            check_assert(&[], &source_stmt_to_term("assert(2 == 3)").unwrap()),
+            check_assert(
+                &[],
+                &Rule::Rule(2, source_expr_to_term("2 == 3").unwrap(), Vec::new())
+            ),
             false
         )
     }
@@ -186,14 +228,17 @@ mod tests {
     #[test]
     fn test_update_facts_1() {
         let mut facts = Vec::new();
-        update_facts(&mut facts, source_stmt_to_term("assert(2 == 3)").unwrap());
-        assert_eq!(facts, vec![source_expr_to_term("2 == 3").unwrap()]);
-        update_facts(&mut facts, source_stmt_to_term("assert(2 == 2)").unwrap());
+        update_facts(&mut facts, source_assert_to_rule("assert(2 == 3)").unwrap());
+        assert_eq!(
+            facts,
+            vec![source_assert_to_rule("assert(2 == 3)").unwrap()]
+        );
+        update_facts(&mut facts, source_assert_to_rule("assert(2 == 2)").unwrap());
         assert_eq!(
             facts,
             vec![
-                source_expr_to_term("2 == 3").unwrap(),
-                source_expr_to_term("2 == 2").unwrap()
+                source_assert_to_rule("assert(2 == 3)").unwrap(),
+                source_assert_to_rule("assert(2 == 2)").unwrap(),
             ]
         );
     }
