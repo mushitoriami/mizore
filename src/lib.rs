@@ -88,14 +88,16 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
     }
 }
 
-fn infer_term(term: Term, facts: &[Rule]) -> bool {
-    infer(&[term], facts).is_some()
+fn infer_term(term: Term, facts: &[Rule], depth: u64) -> bool {
+    infer(&[term], facts)
+        .filter(|&(c, _)| c < depth * 2 + 1)
+        .is_some()
 }
 
-fn verify_assert(facts: &[Rule], stmt: &Stmt) -> bool {
+fn verify_assert(facts: &[Rule], stmt: &Stmt, depth: u64) -> bool {
     match assert_to_rule(stmt) {
         Some(Rule::Rule(_, head, body)) if body.is_empty() => {
-            evaluate_term_bool(&head).unwrap_or_else(|| infer_term(head, facts))
+            evaluate_term_bool(&head).unwrap_or_else(|| infer_term(head, facts, depth))
         }
         Some(_) => todo!(),
         _ => true,
@@ -121,14 +123,14 @@ fn update_facts(facts: &mut Vec<Rule>, stmt: &Stmt) {
     }
 }
 
-fn verify_function(function: &Stmt) -> Vec<TextRange> {
+fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
     let Stmt::FunctionDef(ast) = function else {
         panic!()
     };
     let mut errs: Vec<TextRange> = Vec::new();
     let mut facts: Vec<Rule> = Vec::new();
     for stmt in &ast.body {
-        if !verify_assert(&facts, &stmt) {
+        if !verify_assert(&facts, &stmt, depth) {
             errs.push(stmt.range());
         }
         update_facts(&mut facts, &stmt);
@@ -291,32 +293,32 @@ mod tests {
     #[test]
     fn test_verify_assert_1() {
         let stmt = source_to_stmt("assert(2 == 2)").unwrap();
-        assert_eq!(verify_assert(&[], &stmt), true)
+        assert_eq!(verify_assert(&[], &stmt, 5), true)
     }
 
     #[test]
     fn test_verify_assert_2() {
         let stmt = source_to_stmt("assert(2 == 3)").unwrap();
-        assert_eq!(verify_assert(&[], &stmt), false)
+        assert_eq!(verify_assert(&[], &stmt, 5), false)
     }
 
     #[test]
     fn test_verify_assert_3() {
         let stmt = source_to_stmt("x = 3").unwrap();
-        assert_eq!(verify_assert(&[], &stmt), true)
+        assert_eq!(verify_assert(&[], &stmt, 5), true)
     }
 
     #[test]
     fn test_verify_assert_4() {
         let stmt = source_to_stmt("assert(x == 3)").unwrap();
-        assert_eq!(verify_assert(&[], &stmt), false)
+        assert_eq!(verify_assert(&[], &stmt, 5), false)
     }
 
     #[test]
     fn test_verify_assert_5() {
         let stmt = source_to_stmt("assert(x == 3)").unwrap();
         assert_eq!(
-            verify_assert(&[assert_to_rule(&stmt).unwrap()], &stmt),
+            verify_assert(&[assert_to_rule(&stmt).unwrap()], &stmt, 5),
             true
         )
     }
@@ -355,7 +357,7 @@ def test_function():
     assert(2 == 2)
 "#;
         assert_eq!(
-            verify_function(&source_to_stmt(source).unwrap()),
+            verify_function(&source_to_stmt(source).unwrap(), 5),
             vec![TextRange::new(TextSize::new(26), TextSize::new(40))]
         );
     }
@@ -367,6 +369,6 @@ def test_function():
     x = 3
     assert(x == 3)
 "#;
-        assert_eq!(verify_function(&source_to_stmt(source).unwrap()), vec![]);
+        assert_eq!(verify_function(&source_to_stmt(source).unwrap(), 5), vec![]);
     }
 }
