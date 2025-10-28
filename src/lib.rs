@@ -37,8 +37,8 @@ fn assert_to_rule(assert: &Stmt) -> Option<Rule> {
         Stmt::If(ast) => match ast.body.as_slice() {
             [Stmt::Assert(ast_assert)] => Some(Rule::Rule(
                 2,
-                expr_to_term(&ast.test)?,
-                vec![expr_to_term(&ast_assert.test)?],
+                expr_to_term(&ast_assert.test)?,
+                vec![expr_to_term(&ast.test)?],
             )),
             _ => None,
         },
@@ -157,7 +157,7 @@ mod tests {
                         ),
                         Term::Compound(
                             "Literal".into(),
-                            vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                            vec![Term::Constant("Int".into()), Term::Constant("4".into())]
                         )
                     ]
                 ),
@@ -171,7 +171,7 @@ mod tests {
                         ),
                         Term::Compound(
                             "Literal".into(),
-                            vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                            vec![Term::Constant("Int".into()), Term::Constant("3".into())]
                         )
                     ]
                 ),]
