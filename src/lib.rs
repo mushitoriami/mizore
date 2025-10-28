@@ -52,8 +52,11 @@ fn assert_to_rule(assert: &Stmt) -> Option<Rule> {
         Stmt::If(ast) => match ast.body.as_slice() {
             [Stmt::Assert(ast_assert)] => Some(Rule::Rule(
                 2,
-                expr_to_term(&ast_assert.test)?,
-                vec![expr_to_term(&ast.test)?],
+                Term::Compound(
+                    "Arrow".into(),
+                    vec![expr_to_term(&ast.test)?, expr_to_term(&ast_assert.test)?],
+                ),
+                Vec::new(),
             )),
             _ => None,
         },
@@ -202,33 +205,39 @@ mod tests {
             Some(Rule::Rule(
                 2,
                 Term::Compound(
-                    "Compare".into(),
+                    "Arrow".into(),
                     vec![
-                        Term::Constant("==".into()),
                         Term::Compound(
-                            "Literal".into(),
-                            vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                            "Compare".into(),
+                            vec![
+                                Term::Constant("==".into()),
+                                Term::Compound(
+                                    "Literal".into(),
+                                    vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                                ),
+                                Term::Compound(
+                                    "Literal".into(),
+                                    vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                                )
+                            ]
                         ),
                         Term::Compound(
-                            "Literal".into(),
-                            vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                            "Compare".into(),
+                            vec![
+                                Term::Constant("==".into()),
+                                Term::Compound(
+                                    "Literal".into(),
+                                    vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                                ),
+                                Term::Compound(
+                                    "Literal".into(),
+                                    vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                                )
+                            ]
                         )
                     ]
                 ),
-                vec![Term::Compound(
-                    "Compare".into(),
-                    vec![
-                        Term::Constant("==".into()),
-                        Term::Compound(
-                            "Literal".into(),
-                            vec![Term::Constant("Int".into()), Term::Constant("2".into())]
-                        ),
-                        Term::Compound(
-                            "Literal".into(),
-                            vec![Term::Constant("Int".into()), Term::Constant("3".into())]
-                        )
-                    ]
-                ),]
+                Vec::new()
             ))
         )
     }
