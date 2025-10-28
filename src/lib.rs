@@ -96,6 +96,19 @@ fn verify_assert(_facts: &[Rule], stmt: &Stmt) -> bool {
 fn update_facts(facts: &mut Vec<Rule>, stmt: &Stmt) {
     if let Some(rule) = assert_to_rule(stmt) {
         facts.push(rule)
+    } else if let Stmt::Assign(ast) = stmt {
+        facts.push(Rule::Rule(
+            2,
+            Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant("==".into()),
+                    expr_to_term(&ast.targets[0]).unwrap(),
+                    expr_to_term(&ast.value).unwrap(),
+                ],
+            ),
+            Vec::new(),
+        ))
     }
 }
 
@@ -293,6 +306,15 @@ mod tests {
                 assert_to_rule(&stmt_2).unwrap()
             ]
         );
+    }
+
+    #[test]
+    fn test_update_facts_2() {
+        let stmt = source_to_stmt("x = 3").unwrap();
+        let stmt_2 = source_to_stmt("assert(x == 3)").unwrap();
+        let mut facts = Vec::new();
+        update_facts(&mut facts, &stmt);
+        assert_eq!(facts, vec![assert_to_rule(&stmt_2).unwrap()]);
     }
 
     #[test]
