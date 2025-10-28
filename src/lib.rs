@@ -383,6 +383,58 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_assert_8() {
+        let stmt = source_to_stmt("assert(p == q)").unwrap();
+        let stmt_2 = source_to_stmt("assert(q == p)").unwrap();
+        let facts = vec![
+            assert_to_rule(&stmt).unwrap(),
+            Rule::Rule(
+                2,
+                Term::Compound(
+                    "Compare".into(),
+                    vec![
+                        Term::Constant("==".into()),
+                        Term::Variable("x".into()),
+                        Term::Variable("y".into()),
+                    ],
+                ),
+                vec![Term::Compound(
+                    "Compare".into(),
+                    vec![
+                        Term::Constant("==".into()),
+                        Term::Variable("y".into()),
+                        Term::Variable("x".into()),
+                    ],
+                )],
+            ),
+            Rule::Rule(
+                2,
+                Term::Variable("y".into()),
+                vec![
+                    Term::Compound(
+                        "Arrow".into(),
+                        vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                    ),
+                    Term::Variable("x".into()),
+                ],
+            ),
+            Rule::Rule(11, Term::Variable("x".into()), vec![]),
+        ];
+        assert_eq!(verify_assert(&facts, &stmt_2, 5), true)
+    }
+
+    #[test]
+    fn test_verify_assert_9() {
+        let stmt = source_to_stmt("assert(p == q)").unwrap();
+        let stmt_2 = source_to_stmt("assert(q == p)").unwrap();
+        let facts = vec![
+            assert_to_rule(&stmt).unwrap(),
+            Rule::Rule(11, Term::Variable("x".into()), vec![]),
+        ];
+        assert_eq!(verify_assert(&facts, &stmt_2, 5), false)
+    }
+
+    #[test]
     fn test_update_facts_1() {
         let stmt = source_to_stmt("assert(2 == 3)").unwrap();
         let stmt_2 = source_to_stmt("assert(2 == 2)").unwrap();
