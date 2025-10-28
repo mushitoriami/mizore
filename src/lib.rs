@@ -128,7 +128,20 @@ fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
         panic!()
     };
     let mut errs: Vec<TextRange> = Vec::new();
-    let mut facts: Vec<Rule> = Vec::new();
+    let mut facts = vec![
+        Rule::Rule(
+            2,
+            Term::Variable("y".into()),
+            vec![
+                Term::Compound(
+                    "Arrow".into(),
+                    vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                ),
+                Term::Variable("x".into()),
+            ],
+        ),
+        Rule::Rule(11, Term::Variable("x".into()), vec![]),
+    ];
     for stmt in &ast.body {
         if !verify_assert(&facts, &stmt, depth) {
             errs.push(stmt.range());
@@ -324,6 +337,52 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_assert_6() {
+        let stmt = source_to_stmt("assert(x == 3)").unwrap();
+        let stmt_2 = source_to_stmt("if x == 3:\n    assert(y == 3)").unwrap();
+        let stmt_3 = source_to_stmt("assert(y == 3)").unwrap();
+        let facts = vec![
+            assert_to_rule(&stmt).unwrap(),
+            assert_to_rule(&stmt_2).unwrap(),
+            Rule::Rule(
+                2,
+                Term::Variable("y".into()),
+                vec![
+                    Term::Compound(
+                        "Arrow".into(),
+                        vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                    ),
+                    Term::Variable("x".into()),
+                ],
+            ),
+            Rule::Rule(11, Term::Variable("x".into()), vec![]),
+        ];
+        assert_eq!(verify_assert(&facts, &stmt_3, 5), true)
+    }
+
+    #[test]
+    fn test_verify_assert_7() {
+        let stmt_2 = source_to_stmt("if x == 3:\n    assert(y == 3)").unwrap();
+        let stmt_3 = source_to_stmt("assert(y == 3)").unwrap();
+        let facts = vec![
+            assert_to_rule(&stmt_2).unwrap(),
+            Rule::Rule(
+                2,
+                Term::Variable("y".into()),
+                vec![
+                    Term::Compound(
+                        "Arrow".into(),
+                        vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                    ),
+                    Term::Variable("x".into()),
+                ],
+            ),
+            Rule::Rule(11, Term::Variable("x".into()), vec![]),
+        ];
+        assert_eq!(verify_assert(&facts, &stmt_3, 5), false)
+    }
+
+    #[test]
     fn test_update_facts_1() {
         let stmt = source_to_stmt("assert(2 == 3)").unwrap();
         let stmt_2 = source_to_stmt("assert(2 == 2)").unwrap();
@@ -370,5 +429,27 @@ def test_function():
     assert(x == 3)
 "#;
         assert_eq!(verify_function(&source_to_stmt(source).unwrap(), 5), vec![]);
+    }
+
+    #[test]
+    fn test_verify_function_3() {
+        let source = r#"
+def test_function():
+    x = 3
+    if x == 3:
+        assert(y == 1)
+    if x == 4:
+        assert(z == 2)
+    assert(y == 1)
+    assert(z == 2)
+"#;
+        assert_eq!(
+            verify_function(&source_to_stmt(source).unwrap(), 5),
+            vec![
+                TextRange::new(TextSize::new(36), TextSize::new(69)),
+                TextRange::new(TextSize::new(74), TextSize::new(107)),
+                TextRange::new(TextSize::new(131), TextSize::new(145))
+            ]
+        );
     }
 }
