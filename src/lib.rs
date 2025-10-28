@@ -84,7 +84,7 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
 fn verify_assert(_facts: &[Rule], stmt: &Stmt) -> bool {
     match assert_to_rule(stmt) {
         Some(Rule::Rule(_, head, body)) if body.is_empty() => evaluate_term_bool(&head).unwrap(),
-        Some(_) => false,
+        Some(_) => todo!(),
         _ => true,
     }
 }
