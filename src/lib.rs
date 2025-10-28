@@ -1,4 +1,4 @@
-use cosp::{Rule, Term};
+use cosp::{Rule, Term, infer};
 use ruff_python_ast::{Expr, Number, Stmt};
 use ruff_python_parser::{parse_expression, parse_module};
 use ruff_text_size::{Ranged, TextRange, TextSize};
@@ -88,9 +88,15 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
     }
 }
 
-fn verify_assert(_facts: &[Rule], stmt: &Stmt) -> bool {
+fn infer_term(term: Term, facts: &[Rule]) -> bool {
+    infer(&[term], facts).is_some()
+}
+
+fn verify_assert(facts: &[Rule], stmt: &Stmt) -> bool {
     match assert_to_rule(stmt) {
-        Some(Rule::Rule(_, head, body)) if body.is_empty() => evaluate_term_bool(&head).unwrap(),
+        Some(Rule::Rule(_, head, body)) if body.is_empty() => {
+            evaluate_term_bool(&head).unwrap_or_else(|| infer_term(head, facts))
+        }
         Some(_) => todo!(),
         _ => true,
     }
@@ -301,6 +307,21 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_assert_4() {
+        let stmt = source_to_stmt("assert(x == 3)").unwrap();
+        assert_eq!(verify_assert(&[], &stmt), false)
+    }
+
+    #[test]
+    fn test_verify_assert_5() {
+        let stmt = source_to_stmt("assert(x == 3)").unwrap();
+        assert_eq!(
+            verify_assert(&[assert_to_rule(&stmt).unwrap()], &stmt),
+            true
+        )
+    }
+
+    #[test]
     fn test_update_facts_1() {
         let stmt = source_to_stmt("assert(2 == 3)").unwrap();
         let stmt_2 = source_to_stmt("assert(2 == 2)").unwrap();
@@ -337,5 +358,15 @@ def test_function():
             verify_function(&source_to_stmt(source).unwrap()),
             vec![TextRange::new(TextSize::new(26), TextSize::new(40))]
         );
+    }
+
+    #[test]
+    fn test_verify_function_2() {
+        let source = r#"
+def test_function():
+    x = 3
+    assert(x == 3)
+"#;
+        assert_eq!(verify_function(&source_to_stmt(source).unwrap()), vec![]);
     }
 }
