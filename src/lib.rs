@@ -52,8 +52,8 @@ fn assert_to_rule(assert: &Stmt) -> Option<Rule> {
         Stmt::If(ast) => match ast.body.as_slice() {
             [Stmt::Assert(ast_assert)] => Some(Rule::Rule(
                 2,
-                expr_to_term(&ast.test)?,
-                vec![expr_to_term(&ast_assert.test)?],
+                expr_to_term(&ast_assert.test)?,
+                vec![expr_to_term(&ast.test)?],
             )),
             _ => None,
         },
@@ -88,7 +88,7 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
 fn verify_assert(_facts: &[Rule], stmt: &Stmt) -> bool {
     match assert_to_rule(stmt) {
         Some(Rule::Rule(_, head, body)) if body.is_empty() => evaluate_term_bool(&head).unwrap(),
-        Some(_) => false,
+        Some(_) => todo!(),
         _ => true,
     }
 }
@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn test_expr_to_term_2() {
         assert_eq!(
-            source_expr_to_term("x == 3"),
+            expr_to_term(&source_to_expr("x == 3").unwrap()),
             Some(Term::Compound(
                 "Compare".into(),
                 vec![
@@ -198,7 +198,7 @@ mod tests {
                         ),
                         Term::Compound(
                             "Literal".into(),
-                            vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                            vec![Term::Constant("Int".into()), Term::Constant("4".into())]
                         )
                     ]
                 ),
@@ -212,7 +212,7 @@ mod tests {
                         ),
                         Term::Compound(
                             "Literal".into(),
-                            vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                            vec![Term::Constant("Int".into()), Term::Constant("3".into())]
                         )
                     ]
                 ),]
@@ -231,7 +231,7 @@ mod tests {
     #[test]
     fn test_evaluate_term_i64_2() {
         assert_eq!(
-            source_expr_to_term("x").map(|x| evaluate_term_i64(&x)),
+            expr_to_term(&source_to_expr("x").unwrap()).map(|x| evaluate_term_i64(&x)),
             Some(None)
         )
     }
@@ -255,7 +255,7 @@ mod tests {
     #[test]
     fn test_evaluate_term_bool_3() {
         assert_eq!(
-            source_expr_to_term("x == 3").map(|x| evaluate_term_bool(&x)),
+            expr_to_term(&source_to_expr("x == 3").unwrap()).map(|x| evaluate_term_bool(&x)),
             Some(None)
         )
     }
