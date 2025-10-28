@@ -1,6 +1,17 @@
 use cosp::{Rule, Term};
 use ruff_python_ast::{Expr, Number, Stmt};
 use ruff_python_parser::{parse_expression, parse_module};
+use ruff_text_size::{Ranged, TextRange, TextSize};
+
+fn source_to_expr(source: &str) -> Option<Expr> {
+    let parsed = parse_expression(source).unwrap();
+    Some(parsed.into_expr())
+}
+
+fn source_to_stmt(source: &str) -> Option<Stmt> {
+    let parsed = parse_module(source).unwrap();
+    parsed.into_suite().pop()
+}
 
 fn expr_to_term(expr: &Expr) -> Option<Term> {
     match expr {
@@ -46,16 +57,6 @@ fn assert_to_rule(assert: &Stmt) -> Option<Rule> {
     }
 }
 
-fn source_expr_to_term(source: &str) -> Option<Term> {
-    let parsed = parse_expression(source).ok()?;
-    expr_to_term(&parsed.into_expr())
-}
-
-fn source_assert_to_rule(source: &str) -> Option<Rule> {
-    let parsed = parse_module(source).ok()?;
-    assert_to_rule(&parsed.into_suite()[0])
-}
-
 fn evaluate_term_i64(term: &Term) -> Option<i64> {
     match term {
         Term::Compound(label, args) if label == "Literal" => match args.as_slice() {
@@ -80,15 +81,33 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
     }
 }
 
-fn check_assert(_facts: &[Rule], assert: &Rule) -> bool {
-    match assert {
-        Rule::Rule(_, head, body) if body.is_empty() => evaluate_term_bool(head).unwrap(),
-        _ => false,
+fn verify_assert(_facts: &[Rule], stmt: &Stmt) -> bool {
+    match assert_to_rule(stmt) {
+        Some(Rule::Rule(_, head, body)) if body.is_empty() => evaluate_term_bool(&head).unwrap(),
+        Some(_) => todo!(),
+        _ => true,
     }
 }
 
-fn update_facts(facts: &mut Vec<Rule>, assert: Rule) {
-    facts.push(assert)
+fn update_facts(facts: &mut Vec<Rule>, stmt: &Stmt) {
+    if let Some(rule) = assert_to_rule(stmt) {
+        facts.push(rule)
+    }
+}
+
+fn verify_function(function: &Stmt) -> Vec<TextRange> {
+    let Stmt::FunctionDef(ast) = function else {
+        panic!()
+    };
+    let mut errs: Vec<TextRange> = Vec::new();
+    let mut facts: Vec<Rule> = Vec::new();
+    for stmt in &ast.body {
+        if !verify_assert(&facts, &stmt) {
+            errs.push(stmt.range());
+        }
+        update_facts(&mut facts, &stmt);
+    }
+    errs
 }
 
 #[cfg(test)]
@@ -98,7 +117,7 @@ mod tests {
     #[test]
     fn test_expr_to_term_1() {
         assert_eq!(
-            source_expr_to_term("2 == 3"),
+            expr_to_term(&source_to_expr("2 == 3").unwrap()),
             Some(Term::Compound(
                 "Compare".into(),
                 vec![
@@ -119,7 +138,7 @@ mod tests {
     #[test]
     fn test_assert_to_rule_1() {
         assert_eq!(
-            source_assert_to_rule("assert(2 == 4)\n"),
+            assert_to_rule(&source_to_stmt("assert(2 == 4)\n").unwrap()),
             Some(Rule::Rule(
                 2,
                 Term::Compound(
@@ -144,7 +163,7 @@ mod tests {
     #[test]
     fn test_assert_to_rule_2() {
         assert_eq!(
-            source_assert_to_rule("if 2 == 3:\n    assert(2 == 4)\n"),
+            assert_to_rule(&source_to_stmt("if 2 == 3:\n    assert(2 == 4)\n").unwrap()),
             Some(Rule::Rule(
                 2,
                 Term::Compound(
@@ -182,7 +201,7 @@ mod tests {
     #[test]
     fn test_evaluate_term_i64_1() {
         assert_eq!(
-            source_expr_to_term("2").map(|x| evaluate_term_i64(&x)),
+            expr_to_term(&source_to_expr("2").unwrap()).map(|x| evaluate_term_i64(&x)),
             Some(Some(2))
         )
     }
@@ -190,7 +209,7 @@ mod tests {
     #[test]
     fn test_evaluate_term_bool_1() {
         assert_eq!(
-            source_expr_to_term("2 == 2").map(|x| evaluate_term_bool(&x)),
+            expr_to_term(&source_to_expr("2 == 2").unwrap()).map(|x| evaluate_term_bool(&x)),
             Some(Some(true))
         )
     }
@@ -198,48 +217,50 @@ mod tests {
     #[test]
     fn test_evaluate_term_bool_2() {
         assert_eq!(
-            source_expr_to_term("2 == 3").map(|x| evaluate_term_bool(&x)),
+            expr_to_term(&source_to_expr("2 == 3").unwrap()).map(|x| evaluate_term_bool(&x)),
             Some(Some(false))
         )
     }
 
     #[test]
-    fn test_check_assert_1() {
-        assert_eq!(
-            check_assert(
-                &[],
-                &Rule::Rule(2, source_expr_to_term("2 == 2").unwrap(), Vec::new())
-            ),
-            true
-        )
+    fn test_verify_assert_1() {
+        let stmt = source_to_stmt("assert(2 == 2)").unwrap();
+        assert_eq!(verify_assert(&[], &stmt), true)
     }
 
     #[test]
-    fn test_check_assert_2() {
-        assert_eq!(
-            check_assert(
-                &[],
-                &Rule::Rule(2, source_expr_to_term("2 == 3").unwrap(), Vec::new())
-            ),
-            false
-        )
+    fn test_verify_assert_2() {
+        let stmt = source_to_stmt("assert(2 == 3)").unwrap();
+        assert_eq!(verify_assert(&[], &stmt), false)
     }
 
     #[test]
     fn test_update_facts_1() {
+        let stmt = source_to_stmt("assert(2 == 3)").unwrap();
+        let stmt_2 = source_to_stmt("assert(2 == 2)").unwrap();
         let mut facts = Vec::new();
-        update_facts(&mut facts, source_assert_to_rule("assert(2 == 3)").unwrap());
-        assert_eq!(
-            facts,
-            vec![source_assert_to_rule("assert(2 == 3)").unwrap()]
-        );
-        update_facts(&mut facts, source_assert_to_rule("assert(2 == 2)").unwrap());
+        update_facts(&mut facts, &stmt);
+        assert_eq!(facts, vec![assert_to_rule(&stmt).unwrap()]);
+        update_facts(&mut facts, &stmt_2);
         assert_eq!(
             facts,
             vec![
-                source_assert_to_rule("assert(2 == 3)").unwrap(),
-                source_assert_to_rule("assert(2 == 2)").unwrap(),
+                assert_to_rule(&stmt).unwrap(),
+                assert_to_rule(&stmt_2).unwrap()
             ]
+        );
+    }
+
+    #[test]
+    fn test_verify_function_1() {
+        let source = r#"
+def test_function():
+    assert(2 == 3)
+    assert(2 == 2)
+"#;
+        assert_eq!(
+            verify_function(&source_to_stmt(source).unwrap()),
+            vec![TextRange::new(TextSize::new(26), TextSize::new(40))]
         );
     }
 }
