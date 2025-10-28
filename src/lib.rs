@@ -273,6 +273,12 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_assert_3() {
+        let stmt = source_to_stmt("x = 3").unwrap();
+        assert_eq!(verify_assert(&[], &stmt), true)
+    }
+
+    #[test]
     fn test_update_facts_1() {
         let stmt = source_to_stmt("assert(2 == 3)").unwrap();
         let stmt_2 = source_to_stmt("assert(2 == 2)").unwrap();
