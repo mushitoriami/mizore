@@ -37,6 +37,19 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
                 vec![op_term, left_term, right_term],
             ))
         }
+        Expr::BoolOp(ast) => {
+            if ast.values.len() == 2 {
+                let left_term = expr_to_term(&ast.values[0])?;
+                let right_term = expr_to_term(&ast.values[1])?;
+                let op_term = Term::Constant(ast.op.to_string());
+                Some(Term::Compound(
+                    "BoolOp".into(),
+                    vec![op_term, left_term, right_term],
+                ))
+            } else {
+                None
+            }
+        }
         Expr::NumberLiteral(ast) => match &ast.value {
             Number::Int(value) => Some(Term::Compound(
                 "Literal".into(),
@@ -299,6 +312,21 @@ mod tests {
                         "Literal".into(),
                         vec![Term::Constant("Int".into()), Term::Constant("5".into())]
                     )
+                ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_expr_to_term_7() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x and y").unwrap()),
+            Some(Term::Compound(
+                "BoolOp".into(),
+                vec![
+                    Term::Constant("and".into()),
+                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound("Variable".into(), vec![Term::Constant("y".into())]),
                 ]
             ))
         )
