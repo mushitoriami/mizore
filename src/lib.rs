@@ -122,7 +122,16 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
                     _ => None
                 }
             }
-
+            _ => None,
+        },
+        Term::Compound(label, args) if label == "BoolOp" => match args.as_slice() {
+            [Term::Constant(label), left, right] => {
+                match label.as_str() {
+                    "and" => Some(evaluate_term_bool(left)? && evaluate_term_bool(right)?),
+                    "or" => Some(evaluate_term_bool(left)? || evaluate_term_bool(right)?),
+                    _ => None
+                }
+            }
             _ => None,
         },
         _ => None,
@@ -462,6 +471,22 @@ mod tests {
         assert_eq!(
             expr_to_term(&source_to_expr("20 % 3 > 5").unwrap()).map(|x| evaluate_term_bool(&x)),
             Some(Some(false))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_6() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("1 > 5 and 3 == 3").unwrap()).map(|x| evaluate_term_bool(&x)),
+            Some(Some(false))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_7() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("1 > 5 or 3 == 3").unwrap()).map(|x| evaluate_term_bool(&x)),
+            Some(Some(true))
         )
     }
 
