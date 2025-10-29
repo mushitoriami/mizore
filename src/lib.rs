@@ -28,6 +28,15 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
                 None
             }
         }
+        Expr::BinOp(ast) => {
+            let left_term = expr_to_term(&ast.left)?;
+            let right_term = expr_to_term(&ast.right)?;
+            let op_term = Term::Constant(ast.op.to_string());
+            Some(Term::Compound(
+                "BinOp".into(),
+                vec![op_term, left_term, right_term],
+            ))
+        }
         Expr::NumberLiteral(ast) => match &ast.value {
             Number::Int(value) => Some(Term::Compound(
                 "Literal".into(),
@@ -188,6 +197,88 @@ mod tests {
                     Term::Compound(
                         "Literal".into(),
                         vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                    )
+                ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_expr_to_term_3() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x <= 3").unwrap()),
+            Some(Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant("<=".into()),
+                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Literal".into(),
+                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                    )
+                ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_expr_to_term_4() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x > 3").unwrap()),
+            Some(Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant(">".into()),
+                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Literal".into(),
+                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                    )
+                ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_expr_to_term_5() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x + 3").unwrap()),
+            Some(Term::Compound(
+                "BinOp".into(),
+                vec![
+                    Term::Constant("+".into()),
+                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Literal".into(),
+                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                    )
+                ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_expr_to_term_6() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x % 3 < 5").unwrap()),
+            Some(Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant("<".into()),
+                    Term::Compound(
+                        "BinOp".into(),
+                        vec![
+                            Term::Constant("%".into()),
+                            Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                            Term::Compound(
+                                "Literal".into(),
+                                vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                            )
+                        ]
+                    ),
+                    Term::Compound(
+                        "Literal".into(),
+                        vec![Term::Constant("Int".into()), Term::Constant("5".into())]
                     )
                 ]
             ))
