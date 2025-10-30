@@ -28,6 +28,15 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
                 None
             }
         }
+        Expr::BinOp(ast) => {
+            let left_term = expr_to_term(&ast.left)?;
+            let right_term = expr_to_term(&ast.right)?;
+            let op_term = Term::Constant(ast.op.to_string());
+            Some(Term::Compound(
+                "BinOp".into(),
+                vec![op_term, left_term, right_term],
+            ))
+        }
         Expr::NumberLiteral(ast) => match &ast.value {
             Number::Int(value) => Some(Term::Compound(
                 "Literal".into(),
@@ -72,6 +81,17 @@ fn evaluate_term_i64(term: &Term) -> Option<i64> {
             }
             _ => None,
         },
+        Term::Compound(label, args) if label == "BinOp" => match args.as_slice() {
+            [Term::Constant(label), left, right] => match label.as_str() {
+                "+" => Some(evaluate_term_i64(left)? + evaluate_term_i64(right)?),
+                "-" => Some(evaluate_term_i64(left)? - evaluate_term_i64(right)?),
+                "*" => Some(evaluate_term_i64(left)? * evaluate_term_i64(right)?),
+                "/" => Some(evaluate_term_i64(left)? / evaluate_term_i64(right)?),
+                "%" => Some(evaluate_term_i64(left)? % evaluate_term_i64(right)?),
+                _ => None,
+            },
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -79,9 +99,17 @@ fn evaluate_term_i64(term: &Term) -> Option<i64> {
 fn evaluate_term_bool(term: &Term) -> Option<bool> {
     match term {
         Term::Compound(label, args) if label == "Compare" => match args.as_slice() {
-            [Term::Constant(label), left, right] if label == "==" => {
-                Some(evaluate_term_i64(left)? == evaluate_term_i64(right)?)
+            [Term::Constant(label), left, right] => {
+                match label.as_str() {
+                    "==" => Some(evaluate_term_i64(left)? == evaluate_term_i64(right)?),
+                    ">" => Some(evaluate_term_i64(left)? > evaluate_term_i64(right)?),
+                    "<" => Some(evaluate_term_i64(left)? < evaluate_term_i64(right)?),
+                    ">=" => Some(evaluate_term_i64(left)? >= evaluate_term_i64(right)?),
+                    "<=" => Some(evaluate_term_i64(left)? <= evaluate_term_i64(right)?),
+                    _ => None
+                }
             }
+
             _ => None,
         },
         _ => None,
@@ -195,6 +223,88 @@ mod tests {
     }
 
     #[test]
+    fn test_expr_to_term_3() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x <= 3").unwrap()),
+            Some(Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant("<=".into()),
+                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Literal".into(),
+                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                    )
+                ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_expr_to_term_4() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x > 3").unwrap()),
+            Some(Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant(">".into()),
+                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Literal".into(),
+                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                    )
+                ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_expr_to_term_5() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x + 3").unwrap()),
+            Some(Term::Compound(
+                "BinOp".into(),
+                vec![
+                    Term::Constant("+".into()),
+                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Literal".into(),
+                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                    )
+                ]
+            ))
+        )
+    }
+
+    #[test]
+    fn test_expr_to_term_6() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x % 3 < 5").unwrap()),
+            Some(Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant("<".into()),
+                    Term::Compound(
+                        "BinOp".into(),
+                        vec![
+                            Term::Constant("%".into()),
+                            Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                            Term::Compound(
+                                "Literal".into(),
+                                vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                            )
+                        ]
+                    ),
+                    Term::Compound(
+                        "Literal".into(),
+                        vec![Term::Constant("Int".into()), Term::Constant("5".into())]
+                    )
+                ]
+            ))
+        )
+    }
+
+    #[test]
     fn test_assert_to_rule_1() {
         assert_eq!(
             assert_to_rule(&source_to_stmt("assert(2 == 4)\n").unwrap()),
@@ -280,6 +390,14 @@ mod tests {
     }
 
     #[test]
+    fn test_evaluate_term_i64_3() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("3 + 5").unwrap()).map(|x| evaluate_term_i64(&x)),
+            Some(Some(8))
+        )
+    }
+
+    #[test]
     fn test_evaluate_term_bool_1() {
         assert_eq!(
             expr_to_term(&source_to_expr("2 == 2").unwrap()).map(|x| evaluate_term_bool(&x)),
@@ -300,6 +418,22 @@ mod tests {
         assert_eq!(
             expr_to_term(&source_to_expr("x == 3").unwrap()).map(|x| evaluate_term_bool(&x)),
             Some(None)
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_4() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("8 == 3 + 5").unwrap()).map(|x| evaluate_term_bool(&x)),
+            Some(Some(true))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_5() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("20 % 3 > 5").unwrap()).map(|x| evaluate_term_bool(&x)),
+            Some(Some(false))
         )
     }
 
