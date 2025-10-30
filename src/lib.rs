@@ -37,6 +37,19 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
                 vec![op_term, left_term, right_term],
             ))
         }
+        Expr::BoolOp(ast) => {
+            if ast.values.len() == 2 {
+                let left_term = expr_to_term(&ast.values[0])?;
+                let right_term = expr_to_term(&ast.values[1])?;
+                let op_term = Term::Constant(ast.op.to_string());
+                Some(Term::Compound(
+                    "BoolOp".into(),
+                    vec![op_term, left_term, right_term],
+                ))
+            } else {
+                None
+            }
+        }
         Expr::NumberLiteral(ast) => match &ast.value {
             Number::Int(value) => Some(Term::Compound(
                 "Literal".into(),
@@ -109,7 +122,16 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
                     _ => None
                 }
             }
-
+            _ => None,
+        },
+        Term::Compound(label, args) if label == "BoolOp" => match args.as_slice() {
+            [Term::Constant(label), left, right] => {
+                match label.as_str() {
+                    "and" => Some(evaluate_term_bool(left)? && evaluate_term_bool(right)?),
+                    "or" => Some(evaluate_term_bool(left)? || evaluate_term_bool(right)?),
+                    _ => None
+                }
+            }
             _ => None,
         },
         _ => None,
@@ -305,6 +327,21 @@ mod tests {
     }
 
     #[test]
+    fn test_expr_to_term_7() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("x and y").unwrap()),
+            Some(Term::Compound(
+                "BoolOp".into(),
+                vec![
+                    Term::Constant("and".into()),
+                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound("Variable".into(), vec![Term::Constant("y".into())]),
+                ]
+            ))
+        )
+    }
+
+    #[test]
     fn test_assert_to_rule_1() {
         assert_eq!(
             assert_to_rule(&source_to_stmt("assert(2 == 4)\n").unwrap()),
@@ -434,6 +471,22 @@ mod tests {
         assert_eq!(
             expr_to_term(&source_to_expr("20 % 3 > 5").unwrap()).map(|x| evaluate_term_bool(&x)),
             Some(Some(false))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_6() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("1 > 5 and 3 == 3").unwrap()).map(|x| evaluate_term_bool(&x)),
+            Some(Some(false))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_7() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("1 > 5 or 3 == 3").unwrap()).map(|x| evaluate_term_bool(&x)),
+            Some(Some(true))
         )
     }
 
