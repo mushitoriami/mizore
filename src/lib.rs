@@ -82,6 +82,52 @@ fn assert_to_rule(assert: &Stmt) -> Option<Rule> {
             )),
             _ => None,
         },
+        Stmt::For(ast) => {
+            let Expr::Call(ref ast_call) = *ast.iter else {
+                return None;
+            };
+            let Expr::Name(ref ast_range) = *ast_call.func else {
+                return None;
+            };
+            let [Stmt::Assert(ast_assert)] = ast.body.as_slice() else {
+                return None;
+            };
+            if ast_range.id.to_string() != "range" {
+                return None;
+            }
+            Some(Rule::Rule(
+                2,
+                Term::Compound(
+                    "Arrow".into(),
+                    vec![
+                        Term::Compound(
+                            "BoolOp".into(),
+                            vec![
+                                Term::Constant("and".into()),
+                                Term::Compound(
+                                    "Compare".into(),
+                                    vec![
+                                        Term::Constant("<=".into()),
+                                        expr_to_term(&ast_call.arguments.args[0])?,
+                                        expr_to_term(&ast.target)?,
+                                    ],
+                                ),
+                                Term::Compound(
+                                    "Compare".into(),
+                                    vec![
+                                        Term::Constant("<".into()),
+                                        expr_to_term(&ast.target)?,
+                                        expr_to_term(&ast_call.arguments.args[1])?,
+                                    ],
+                                ),
+                            ],
+                        ),
+                        expr_to_term(&ast_assert.test)?,
+                    ],
+                ),
+                Vec::new(),
+            ))
+        }
         _ => None,
     }
 }
@@ -396,6 +442,73 @@ mod tests {
                                 Term::Compound(
                                     "Literal".into(),
                                     vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                                )
+                            ]
+                        )
+                    ]
+                ),
+                Vec::new()
+            ))
+        )
+    }
+
+    #[test]
+    fn test_assert_to_rule_3() {
+        assert_eq!(
+            assert_to_rule(&source_to_stmt("for i in range(5, 8):\n    assert(i > 6)\n").unwrap()),
+            Some(Rule::Rule(
+                2,
+                Term::Compound(
+                    "Arrow".into(),
+                    vec![
+                        Term::Compound(
+                            "BoolOp".into(),
+                            vec![
+                                Term::Constant("and".into()),
+                                Term::Compound(
+                                    "Compare".into(),
+                                    vec![
+                                        Term::Constant("<=".into()),
+                                        Term::Compound(
+                                            "Literal".into(),
+                                            vec![
+                                                Term::Constant("Int".into()),
+                                                Term::Constant("5".into())
+                                            ]
+                                        ),
+                                        Term::Compound(
+                                            "Variable".into(),
+                                            vec![Term::Constant("i".into())]
+                                        )
+                                    ]
+                                ),
+                                Term::Compound(
+                                    "Compare".into(),
+                                    vec![
+                                        Term::Constant("<".into()),
+                                        Term::Compound(
+                                            "Variable".into(),
+                                            vec![Term::Constant("i".into())]
+                                        ),
+                                        Term::Compound(
+                                            "Literal".into(),
+                                            vec![
+                                                Term::Constant("Int".into()),
+                                                Term::Constant("8".into())
+                                            ]
+                                        )
+                                    ]
+                                )
+                            ]
+                        ),
+                        Term::Compound(
+                            "Compare".into(),
+                            vec![
+                                Term::Constant(">".into()),
+                                Term::Compound("Variable".into(), vec![Term::Constant("i".into())]),
+                                Term::Compound(
+                                    "Literal".into(),
+                                    vec![Term::Constant("Int".into()), Term::Constant("6".into())]
                                 )
                             ]
                         )
