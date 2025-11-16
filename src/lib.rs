@@ -232,6 +232,31 @@ fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
     errs
 }
 
+fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
+    let mut errs: Vec<TextRange> = Vec::new();
+    let mut facts = vec![
+        Rule::Rule(
+            2,
+            Term::Variable("y".into()),
+            vec![
+                Term::Compound(
+                    "Arrow".into(),
+                    vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                ),
+                Term::Variable("x".into()),
+            ],
+        ),
+        Rule::Rule(11, Term::Variable("x".into()), vec![]),
+    ];
+    for stmt in module {
+        if !verify_assert(&facts, &stmt, depth) {
+            errs.push(stmt.range());
+        }
+        update_facts(&mut facts, &stmt);
+    }
+    errs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -791,6 +816,27 @@ def test_function():
                 TextRange::new(TextSize::new(36), TextSize::new(69)),
                 TextRange::new(TextSize::new(74), TextSize::new(107)),
                 TextRange::new(TextSize::new(131), TextSize::new(145))
+            ]
+        );
+    }
+
+    #[test]
+    fn test_verify_module_1() {
+        let source = r#"
+x = 3
+if x == 3:
+    assert(y == 1)
+if x == 4:
+    assert(z == 2)
+assert(y == 1)
+assert(z == 2)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            vec![
+                TextRange::new(TextSize::new(7), TextSize::new(36)),
+                TextRange::new(TextSize::new(37), TextSize::new(66)),
+                TextRange::new(TextSize::new(82), TextSize::new(96))
             ]
         );
     }
