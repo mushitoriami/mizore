@@ -8,7 +8,7 @@ fn source_to_expr(source: &str) -> Option<Expr> {
     Some(parsed.into_expr())
 }
 
-fn source_to_stmts(source: &str) -> Option<Vec<Stmt>> {
+pub fn source_to_stmts(source: &str) -> Option<Vec<Stmt>> {
     let parsed = parse_module(source).unwrap();
     Some(parsed.into_suite())
 }
@@ -232,7 +232,7 @@ fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
     errs
 }
 
-fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
+pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
     let mut errs: Vec<TextRange> = Vec::new();
     let mut facts = vec![
         Rule::Rule(
