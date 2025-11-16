@@ -8,9 +8,9 @@ fn source_to_expr(source: &str) -> Option<Expr> {
     Some(parsed.into_expr())
 }
 
-fn source_to_stmt(source: &str) -> Option<Stmt> {
+fn source_to_stmts(source: &str) -> Option<Vec<Stmt>> {
     let parsed = parse_module(source).unwrap();
-    parsed.into_suite().pop()
+    Some(parsed.into_suite())
 }
 
 fn expr_to_term(expr: &Expr) -> Option<Term> {
@@ -375,7 +375,7 @@ mod tests {
     #[test]
     fn test_assert_to_term_1() {
         assert_eq!(
-            assert_to_term(&source_to_stmt("assert(2 == 4)\n").unwrap()),
+            assert_to_term(&source_to_stmts("assert(2 == 4)\n").unwrap()[0]),
             Some(Term::Compound(
                 "Compare".into(),
                 vec![
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn test_assert_to_term_2() {
         assert_eq!(
-            assert_to_term(&source_to_stmt("if 2 == 3:\n    assert(2 == 4)\n").unwrap()),
+            assert_to_term(&source_to_stmts("if 2 == 3:\n    assert(2 == 4)\n").unwrap()[0]),
             Some(Term::Compound(
                 "Arrow".into(),
                 vec![
@@ -436,7 +436,9 @@ mod tests {
     #[test]
     fn test_assert_to_term_3() {
         assert_eq!(
-            assert_to_term(&source_to_stmt("for i in range(5, 8):\n    assert(i > 6)\n").unwrap()),
+            assert_to_term(
+                &source_to_stmts("for i in range(5, 8):\n    assert(i > 6)\n").unwrap()[0]
+            ),
             Some(Term::Compound(
                 "Arrow".into(),
                 vec![
@@ -580,31 +582,31 @@ mod tests {
 
     #[test]
     fn test_verify_assert_1() {
-        let stmt = source_to_stmt("assert(2 == 2)").unwrap();
-        assert_eq!(verify_assert(&[], &stmt, 5), true)
+        let stmt = &source_to_stmts("assert(2 == 2)").unwrap()[0];
+        assert_eq!(verify_assert(&[], stmt, 5), true)
     }
 
     #[test]
     fn test_verify_assert_2() {
-        let stmt = source_to_stmt("assert(2 == 3)").unwrap();
-        assert_eq!(verify_assert(&[], &stmt, 5), false)
+        let stmt = &source_to_stmts("assert(2 == 3)").unwrap()[0];
+        assert_eq!(verify_assert(&[], stmt, 5), false)
     }
 
     #[test]
     fn test_verify_assert_3() {
-        let stmt = source_to_stmt("x = 3").unwrap();
-        assert_eq!(verify_assert(&[], &stmt, 5), true)
+        let stmt = &source_to_stmts("x = 3").unwrap()[0];
+        assert_eq!(verify_assert(&[], stmt, 5), true)
     }
 
     #[test]
     fn test_verify_assert_4() {
-        let stmt = source_to_stmt("assert(x == 3)").unwrap();
-        assert_eq!(verify_assert(&[], &stmt, 5), false)
+        let stmt = &source_to_stmts("assert(x == 3)").unwrap()[0];
+        assert_eq!(verify_assert(&[], stmt, 5), false)
     }
 
     #[test]
     fn test_verify_assert_5() {
-        let stmt = source_to_stmt("assert(x == 3)").unwrap();
+        let stmt = &source_to_stmts("assert(x == 3)").unwrap()[0];
         assert_eq!(
             verify_assert(
                 &[Rule::Rule(2, assert_to_term(&stmt).unwrap(), Vec::new())],
@@ -617,12 +619,12 @@ mod tests {
 
     #[test]
     fn test_verify_assert_6() {
-        let stmt = source_to_stmt("assert(x == 3)").unwrap();
-        let stmt_2 = source_to_stmt("if x == 3:\n    assert(y == 3)").unwrap();
-        let stmt_3 = source_to_stmt("assert(y == 3)").unwrap();
+        let stmt = &source_to_stmts("assert(x == 3)").unwrap()[0];
+        let stmt_2 = &source_to_stmts("if x == 3:\n    assert(y == 3)").unwrap()[0];
+        let stmt_3 = &source_to_stmts("assert(y == 3)").unwrap()[0];
         let facts = vec![
-            Rule::Rule(2, assert_to_term(&stmt).unwrap(), Vec::new()),
-            Rule::Rule(2, assert_to_term(&stmt_2).unwrap(), Vec::new()),
+            Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new()),
+            Rule::Rule(2, assert_to_term(stmt_2).unwrap(), Vec::new()),
             Rule::Rule(
                 2,
                 Term::Variable("y".into()),
@@ -636,15 +638,15 @@ mod tests {
             ),
             Rule::Rule(11, Term::Variable("x".into()), vec![]),
         ];
-        assert_eq!(verify_assert(&facts, &stmt_3, 5), true)
+        assert_eq!(verify_assert(&facts, stmt_3, 5), true)
     }
 
     #[test]
     fn test_verify_assert_7() {
-        let stmt_2 = source_to_stmt("if x == 3:\n    assert(y == 3)").unwrap();
-        let stmt_3 = source_to_stmt("assert(y == 3)").unwrap();
+        let stmt_2 = &source_to_stmts("if x == 3:\n    assert(y == 3)").unwrap()[0];
+        let stmt_3 = &source_to_stmts("assert(y == 3)").unwrap()[0];
         let facts = vec![
-            Rule::Rule(2, assert_to_term(&stmt_2).unwrap(), Vec::new()),
+            Rule::Rule(2, assert_to_term(stmt_2).unwrap(), Vec::new()),
             Rule::Rule(
                 2,
                 Term::Variable("y".into()),
@@ -658,15 +660,15 @@ mod tests {
             ),
             Rule::Rule(11, Term::Variable("x".into()), vec![]),
         ];
-        assert_eq!(verify_assert(&facts, &stmt_3, 5), false)
+        assert_eq!(verify_assert(&facts, stmt_3, 5), false)
     }
 
     #[test]
     fn test_verify_assert_8() {
-        let stmt = source_to_stmt("assert(p == q)").unwrap();
-        let stmt_2 = source_to_stmt("assert(q == p)").unwrap();
+        let stmt = &source_to_stmts("assert(p == q)").unwrap()[0];
+        let stmt_2 = &source_to_stmts("assert(q == p)").unwrap()[0];
         let facts = vec![
-            Rule::Rule(2, assert_to_term(&stmt).unwrap(), Vec::new()),
+            Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new()),
             Rule::Rule(
                 2,
                 Term::Compound(
@@ -699,49 +701,49 @@ mod tests {
             ),
             Rule::Rule(11, Term::Variable("x".into()), vec![]),
         ];
-        assert_eq!(verify_assert(&facts, &stmt_2, 5), true)
+        assert_eq!(verify_assert(&facts, stmt_2, 5), true)
     }
 
     #[test]
     fn test_verify_assert_9() {
-        let stmt = source_to_stmt("assert(p == q)").unwrap();
-        let stmt_2 = source_to_stmt("assert(q == p)").unwrap();
+        let stmt = &source_to_stmts("assert(p == q)").unwrap()[0];
+        let stmt_2 = &source_to_stmts("assert(q == p)").unwrap()[0];
         let facts = vec![
-            Rule::Rule(2, assert_to_term(&stmt).unwrap(), Vec::new()),
+            Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new()),
             Rule::Rule(11, Term::Variable("x".into()), vec![]),
         ];
-        assert_eq!(verify_assert(&facts, &stmt_2, 5), false)
+        assert_eq!(verify_assert(&facts, stmt_2, 5), false)
     }
 
     #[test]
     fn test_update_facts_1() {
-        let stmt = source_to_stmt("assert(2 == 3)").unwrap();
-        let stmt_2 = source_to_stmt("assert(2 == 2)").unwrap();
+        let stmt = &source_to_stmts("assert(2 == 3)").unwrap()[0];
+        let stmt_2 = &source_to_stmts("assert(2 == 2)").unwrap()[0];
         let mut facts = Vec::new();
-        update_facts(&mut facts, &stmt);
+        update_facts(&mut facts, stmt);
         assert_eq!(
             facts,
-            vec![Rule::Rule(2, assert_to_term(&stmt).unwrap(), Vec::new())]
+            vec![Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new())]
         );
         update_facts(&mut facts, &stmt_2);
         assert_eq!(
             facts,
             vec![
-                Rule::Rule(2, assert_to_term(&stmt).unwrap(), Vec::new()),
-                Rule::Rule(2, assert_to_term(&stmt_2).unwrap(), Vec::new())
+                Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new()),
+                Rule::Rule(2, assert_to_term(stmt_2).unwrap(), Vec::new())
             ]
         );
     }
 
     #[test]
     fn test_update_facts_2() {
-        let stmt = source_to_stmt("x = 3").unwrap();
-        let stmt_2 = source_to_stmt("assert(x == 3)").unwrap();
+        let stmt = &source_to_stmts("x = 3").unwrap()[0];
+        let stmt_2 = &source_to_stmts("assert(x == 3)").unwrap()[0];
         let mut facts = Vec::new();
-        update_facts(&mut facts, &stmt);
+        update_facts(&mut facts, stmt);
         assert_eq!(
             facts,
-            vec![Rule::Rule(2, assert_to_term(&stmt_2).unwrap(), Vec::new())]
+            vec![Rule::Rule(2, assert_to_term(stmt_2).unwrap(), Vec::new())]
         );
     }
 
@@ -753,7 +755,7 @@ def test_function():
     assert(2 == 2)
 "#;
         assert_eq!(
-            verify_function(&source_to_stmt(source).unwrap(), 5),
+            verify_function(&source_to_stmts(source).unwrap()[0], 5),
             vec![TextRange::new(TextSize::new(26), TextSize::new(40))]
         );
     }
@@ -765,7 +767,10 @@ def test_function():
     x = 3
     assert(x == 3)
 "#;
-        assert_eq!(verify_function(&source_to_stmt(source).unwrap(), 5), vec![]);
+        assert_eq!(
+            verify_function(&source_to_stmts(source).unwrap()[0], 5),
+            vec![]
+        );
     }
 
     #[test]
@@ -781,7 +786,7 @@ def test_function():
     assert(z == 2)
 "#;
         assert_eq!(
-            verify_function(&source_to_stmt(source).unwrap(), 5),
+            verify_function(&source_to_stmts(source).unwrap()[0], 5),
             vec![
                 TextRange::new(TextSize::new(36), TextSize::new(69)),
                 TextRange::new(TextSize::new(74), TextSize::new(107)),
