@@ -237,6 +237,25 @@ pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
     let mut facts = vec![
         Rule::Rule(
             2,
+            Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant("==".into()),
+                    Term::Variable("x".into()),
+                    Term::Variable("y".into()),
+                ],
+            ),
+            vec![Term::Compound(
+                "Compare".into(),
+                vec![
+                    Term::Constant("==".into()),
+                    Term::Variable("y".into()),
+                    Term::Variable("x".into()),
+                ],
+            )],
+        ),
+        Rule::Rule(
+            2,
             Term::Variable("y".into()),
             vec![
                 Term::Compound(
