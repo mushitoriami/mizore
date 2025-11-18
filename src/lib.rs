@@ -840,4 +840,25 @@ assert(z == 2)
             ]
         );
     }
+
+    #[test]
+    fn test_verify_module_2() {
+        let source = r#"
+x = 3
+if x == 3:
+    assert(y == 1)
+if x == 4:
+    assert(z == 2)
+assert(1 == y)
+assert(2 == z)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            vec![
+                TextRange::new(TextSize::new(7), TextSize::new(36)),
+                TextRange::new(TextSize::new(37), TextSize::new(66)),
+                TextRange::new(TextSize::new(82), TextSize::new(96))
+            ]
+        );
+    }
 }
