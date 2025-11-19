@@ -1,9 +1,9 @@
 use cosp::{Rule, Term, infer};
 use ruff_python_ast::{Expr, Number, Stmt};
 use ruff_python_parser::{parse_expression, parse_module};
-use ruff_text_size::{Ranged, TextRange, TextSize};
+use ruff_text_size::{Ranged, TextRange};
 
-fn source_to_expr(source: &str) -> Option<Expr> {
+pub fn source_to_expr(source: &str) -> Option<Expr> {
     let parsed = parse_expression(source).unwrap();
     Some(parsed.into_expr())
 }
@@ -204,7 +204,7 @@ fn update_facts(facts: &mut Vec<Rule>, stmt: &Stmt) {
     }
 }
 
-fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
+pub fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
     let Stmt::FunctionDef(ast) = function else {
         panic!()
     };
@@ -279,6 +279,7 @@ pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruff_text_size::TextSize;
 
     #[test]
     fn test_expr_to_term_1() {
