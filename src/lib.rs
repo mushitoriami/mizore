@@ -1,4 +1,4 @@
-use cosp::{Rule, Term, infer};
+use cosp::{Rule, Rules, Term, Terms, infer};
 use ruff_python_ast::{Expr, Number, Stmt};
 use ruff_python_parser::{parse_expression, parse_module};
 use ruff_text_size::{Ranged, TextRange};
@@ -22,7 +22,7 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
                 let op_term = Term::Constant(ast.ops[0].to_string());
                 Some(Term::Compound(
                     "Compare".into(),
-                    vec![op_term, left_term, right_term],
+                    Terms::from_iter([op_term, left_term, right_term]),
                 ))
             } else {
                 None
@@ -34,7 +34,7 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
             let op_term = Term::Constant(ast.op.to_string());
             Some(Term::Compound(
                 "BinOp".into(),
-                vec![op_term, left_term, right_term],
+                Terms::from_iter([op_term, left_term, right_term]),
             ))
         }
         Expr::BoolOp(ast) => {
@@ -44,7 +44,7 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
                 let op_term = Term::Constant(ast.op.to_string());
                 Some(Term::Compound(
                     "BoolOp".into(),
-                    vec![op_term, left_term, right_term],
+                    Terms::from_iter([op_term, left_term, right_term]),
                 ))
             } else {
                 None
@@ -53,16 +53,16 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
         Expr::NumberLiteral(ast) => match &ast.value {
             Number::Int(value) => Some(Term::Compound(
                 "Literal".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("Int".into()),
                     Term::Constant(value.to_string()),
-                ],
+                ]),
             )),
             _ => None,
         },
         Expr::Name(ast) => Some(Term::Compound(
             "Variable".into(),
-            vec![Term::Constant(ast.id.to_string())],
+            Terms::from_iter([Term::Constant(ast.id.to_string())]),
         )),
         _ => None,
     }
@@ -74,7 +74,7 @@ fn assert_to_term(assert: &Stmt) -> Option<Term> {
         Stmt::If(ast) => match ast.body.as_slice() {
             [Stmt::Assert(ast_assert)] => Some(Term::Compound(
                 "Arrow".into(),
-                vec![expr_to_term(&ast.test)?, expr_to_term(&ast_assert.test)?],
+                Terms::from_iter([expr_to_term(&ast.test)?, expr_to_term(&ast_assert.test)?]),
             )),
             _ => None,
         },
@@ -93,31 +93,31 @@ fn assert_to_term(assert: &Stmt) -> Option<Term> {
             }
             Some(Term::Compound(
                 "Arrow".into(),
-                vec![
+                Terms::from_iter([
                     Term::Compound(
                         "BoolOp".into(),
-                        vec![
+                        Terms::from_iter([
                             Term::Constant("and".into()),
                             Term::Compound(
                                 "Compare".into(),
-                                vec![
+                                Terms::from_iter([
                                     Term::Constant("<=".into()),
                                     expr_to_term(&ast_call.arguments.args[0])?,
                                     expr_to_term(&ast.target)?,
-                                ],
+                                ]),
                             ),
                             Term::Compound(
                                 "Compare".into(),
-                                vec![
+                                Terms::from_iter([
                                     Term::Constant("<".into()),
                                     expr_to_term(&ast.target)?,
                                     expr_to_term(&ast_call.arguments.args[1])?,
-                                ],
+                                ]),
                             ),
-                        ],
+                        ]),
                     ),
                     expr_to_term(&ast_assert.test)?,
-                ],
+                ]),
             ))
         }
         _ => None,
@@ -126,13 +126,15 @@ fn assert_to_term(assert: &Stmt) -> Option<Term> {
 
 fn evaluate_term_i64(term: &Term) -> Option<i64> {
     match term {
-        Term::Compound(label, args) if label == "Literal" => match args.as_slice() {
-            [Term::Constant(label), Term::Constant(value)] if label == "Int" => {
-                Some(value.parse().unwrap())
+        Term::Compound(label, args) if label == "Literal" => {
+            match Vec::from_iter(args).as_slice() {
+                [Term::Constant(label), Term::Constant(value)] if label == "Int" => {
+                    Some(value.parse().unwrap())
+                }
+                _ => None,
             }
-            _ => None,
-        },
-        Term::Compound(label, args) if label == "BinOp" => match args.as_slice() {
+        }
+        Term::Compound(label, args) if label == "BinOp" => match Vec::from_iter(args).as_slice() {
             [Term::Constant(label), left, right] => match label.as_str() {
                 "+" => Some(evaluate_term_i64(left)? + evaluate_term_i64(right)?),
                 "-" => Some(evaluate_term_i64(left)? - evaluate_term_i64(right)?),
@@ -149,18 +151,20 @@ fn evaluate_term_i64(term: &Term) -> Option<i64> {
 
 fn evaluate_term_bool(term: &Term) -> Option<bool> {
     match term {
-        Term::Compound(label, args) if label == "Compare" => match args.as_slice() {
-            [Term::Constant(label), left, right] => match label.as_str() {
-                "==" => Some(evaluate_term_i64(left)? == evaluate_term_i64(right)?),
-                ">" => Some(evaluate_term_i64(left)? > evaluate_term_i64(right)?),
-                "<" => Some(evaluate_term_i64(left)? < evaluate_term_i64(right)?),
-                ">=" => Some(evaluate_term_i64(left)? >= evaluate_term_i64(right)?),
-                "<=" => Some(evaluate_term_i64(left)? <= evaluate_term_i64(right)?),
+        Term::Compound(label, args) if label == "Compare" => {
+            match Vec::from_iter(args).as_slice() {
+                [Term::Constant(label), left, right] => match label.as_str() {
+                    "==" => Some(evaluate_term_i64(left)? == evaluate_term_i64(right)?),
+                    ">" => Some(evaluate_term_i64(left)? > evaluate_term_i64(right)?),
+                    "<" => Some(evaluate_term_i64(left)? < evaluate_term_i64(right)?),
+                    ">=" => Some(evaluate_term_i64(left)? >= evaluate_term_i64(right)?),
+                    "<=" => Some(evaluate_term_i64(left)? <= evaluate_term_i64(right)?),
+                    _ => None,
+                },
                 _ => None,
-            },
-            _ => None,
-        },
-        Term::Compound(label, args) if label == "BoolOp" => match args.as_slice() {
+            }
+        }
+        Term::Compound(label, args) if label == "BoolOp" => match Vec::from_iter(args).as_slice() {
             [Term::Constant(label), left, right] => match label.as_str() {
                 "and" => Some(evaluate_term_bool(left)? && evaluate_term_bool(right)?),
                 "or" => Some(evaluate_term_bool(left)? || evaluate_term_bool(right)?),
@@ -173,9 +177,12 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
 }
 
 fn infer_term(term: Term, facts: &[Rule], depth: u64) -> bool {
-    infer(&[term], facts)
-        .filter(|&(c, _)| c < depth * 2 + 1)
-        .is_some()
+    infer(
+        &Terms::from_iter([term]),
+        &Rules::from_iter(facts.into_iter().cloned()),
+    )
+    .filter(|&(c, _)| c < depth * 2 + 1)
+    .is_some()
 }
 
 fn verify_assert(facts: &[Rule], stmt: &Stmt, depth: u64) -> bool {
@@ -187,19 +194,19 @@ fn verify_assert(facts: &[Rule], stmt: &Stmt, depth: u64) -> bool {
 
 fn update_facts(facts: &mut Vec<Rule>, stmt: &Stmt) {
     if let Some(term) = assert_to_term(stmt) {
-        facts.push(Rule::Rule(2, term, Vec::new()))
+        facts.push(Rule::new(2, term, Terms::new()))
     } else if let Stmt::Assign(ast) = stmt {
-        facts.push(Rule::Rule(
+        facts.push(Rule::new(
             2,
             Term::Compound(
                 "Compare".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("==".into()),
                     expr_to_term(&ast.targets[0]).unwrap(),
                     expr_to_term(&ast.value).unwrap(),
-                ],
+                ]),
             ),
-            Vec::new(),
+            Terms::new(),
         ))
     }
 }
@@ -210,18 +217,18 @@ pub fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
     };
     let mut errs: Vec<TextRange> = Vec::new();
     let mut facts = vec![
-        Rule::Rule(
+        Rule::new(
             2,
             Term::Variable("y".into()),
-            vec![
+            Terms::from_iter([
                 Term::Compound(
                     "Arrow".into(),
-                    vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                    Terms::from_iter([Term::Variable("x".into()), Term::Variable("y".into())]),
                 ),
                 Term::Variable("x".into()),
-            ],
+            ]),
         ),
-        Rule::Rule(11, Term::Variable("x".into()), vec![]),
+        Rule::new(11, Term::Variable("x".into()), Terms::new()),
     ];
     for stmt in &ast.body {
         if !verify_assert(&facts, &stmt, depth) {
@@ -235,37 +242,37 @@ pub fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
 pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
     let mut errs: Vec<TextRange> = Vec::new();
     let mut facts = vec![
-        Rule::Rule(
+        Rule::new(
             2,
             Term::Compound(
                 "Compare".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("==".into()),
                     Term::Variable("x".into()),
                     Term::Variable("y".into()),
-                ],
+                ]),
             ),
-            vec![Term::Compound(
+            Terms::from_iter([Term::Compound(
                 "Compare".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("==".into()),
                     Term::Variable("y".into()),
                     Term::Variable("x".into()),
-                ],
-            )],
+                ]),
+            )]),
         ),
-        Rule::Rule(
+        Rule::new(
             2,
             Term::Variable("y".into()),
-            vec![
+            Terms::from_iter([
                 Term::Compound(
                     "Arrow".into(),
-                    vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                    Terms::from_iter([Term::Variable("x".into()), Term::Variable("y".into())]),
                 ),
                 Term::Variable("x".into()),
-            ],
+            ]),
         ),
-        Rule::Rule(11, Term::Variable("x".into()), vec![]),
+        Rule::new(11, Term::Variable("x".into()), Terms::new()),
     ];
     for stmt in module {
         if !verify_assert(&facts, &stmt, depth) {
@@ -287,17 +294,23 @@ mod tests {
             expr_to_term(&source_to_expr("2 == 3").unwrap()),
             Some(Term::Compound(
                 "Compare".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("==".into()),
                     Term::Compound(
                         "Literal".into(),
-                        vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                        Terms::from_iter([
+                            Term::Constant("Int".into()),
+                            Term::Constant("2".into())
+                        ])
                     ),
                     Term::Compound(
                         "Literal".into(),
-                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                        Terms::from_iter([
+                            Term::Constant("Int".into()),
+                            Term::Constant("3".into())
+                        ])
                     )
-                ]
+                ])
             ))
         )
     }
@@ -308,14 +321,20 @@ mod tests {
             expr_to_term(&source_to_expr("x == 3").unwrap()),
             Some(Term::Compound(
                 "Compare".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("==".into()),
-                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Variable".into(),
+                        Terms::from_iter([Term::Constant("x".into())])
+                    ),
                     Term::Compound(
                         "Literal".into(),
-                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                        Terms::from_iter([
+                            Term::Constant("Int".into()),
+                            Term::Constant("3".into())
+                        ])
                     )
-                ]
+                ])
             ))
         )
     }
@@ -326,14 +345,20 @@ mod tests {
             expr_to_term(&source_to_expr("x <= 3").unwrap()),
             Some(Term::Compound(
                 "Compare".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("<=".into()),
-                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Variable".into(),
+                        Terms::from_iter([Term::Constant("x".into())])
+                    ),
                     Term::Compound(
                         "Literal".into(),
-                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                        Terms::from_iter([
+                            Term::Constant("Int".into()),
+                            Term::Constant("3".into())
+                        ])
                     )
-                ]
+                ])
             ))
         )
     }
@@ -344,14 +369,20 @@ mod tests {
             expr_to_term(&source_to_expr("x > 3").unwrap()),
             Some(Term::Compound(
                 "Compare".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant(">".into()),
-                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Variable".into(),
+                        Terms::from_iter([Term::Constant("x".into())])
+                    ),
                     Term::Compound(
                         "Literal".into(),
-                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                        Terms::from_iter([
+                            Term::Constant("Int".into()),
+                            Term::Constant("3".into())
+                        ])
                     )
-                ]
+                ])
             ))
         )
     }
@@ -362,14 +393,20 @@ mod tests {
             expr_to_term(&source_to_expr("x + 3").unwrap()),
             Some(Term::Compound(
                 "BinOp".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("+".into()),
-                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                    Term::Compound(
+                        "Variable".into(),
+                        Terms::from_iter([Term::Constant("x".into())])
+                    ),
                     Term::Compound(
                         "Literal".into(),
-                        vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                        Terms::from_iter([
+                            Term::Constant("Int".into()),
+                            Term::Constant("3".into())
+                        ])
                     )
-                ]
+                ])
             ))
         )
     }
@@ -380,24 +417,33 @@ mod tests {
             expr_to_term(&source_to_expr("x % 3 < 5").unwrap()),
             Some(Term::Compound(
                 "Compare".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("<".into()),
                     Term::Compound(
                         "BinOp".into(),
-                        vec![
+                        Terms::from_iter([
                             Term::Constant("%".into()),
-                            Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
+                            Term::Compound(
+                                "Variable".into(),
+                                Terms::from_iter([Term::Constant("x".into())])
+                            ),
                             Term::Compound(
                                 "Literal".into(),
-                                vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                                Terms::from_iter([
+                                    Term::Constant("Int".into()),
+                                    Term::Constant("3".into())
+                                ])
                             )
-                        ]
+                        ])
                     ),
                     Term::Compound(
                         "Literal".into(),
-                        vec![Term::Constant("Int".into()), Term::Constant("5".into())]
+                        Terms::from_iter([
+                            Term::Constant("Int".into()),
+                            Term::Constant("5".into())
+                        ])
                     )
-                ]
+                ])
             ))
         )
     }
@@ -408,11 +454,17 @@ mod tests {
             expr_to_term(&source_to_expr("x and y").unwrap()),
             Some(Term::Compound(
                 "BoolOp".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("and".into()),
-                    Term::Compound("Variable".into(), vec![Term::Constant("x".into())]),
-                    Term::Compound("Variable".into(), vec![Term::Constant("y".into())]),
-                ]
+                    Term::Compound(
+                        "Variable".into(),
+                        Terms::from_iter([Term::Constant("x".into())])
+                    ),
+                    Term::Compound(
+                        "Variable".into(),
+                        Terms::from_iter([Term::Constant("y".into())])
+                    ),
+                ])
             ))
         )
     }
@@ -423,17 +475,23 @@ mod tests {
             assert_to_term(&source_to_stmts("assert(2 == 4)\n").unwrap()[0]),
             Some(Term::Compound(
                 "Compare".into(),
-                vec![
+                Terms::from_iter([
                     Term::Constant("==".into()),
                     Term::Compound(
                         "Literal".into(),
-                        vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                        Terms::from_iter([
+                            Term::Constant("Int".into()),
+                            Term::Constant("2".into())
+                        ])
                     ),
                     Term::Compound(
                         "Literal".into(),
-                        vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                        Terms::from_iter([
+                            Term::Constant("Int".into()),
+                            Term::Constant("4".into())
+                        ])
                     )
-                ]
+                ])
             ))
         )
     }
@@ -444,36 +502,48 @@ mod tests {
             assert_to_term(&source_to_stmts("if 2 == 3:\n    assert(2 == 4)\n").unwrap()[0]),
             Some(Term::Compound(
                 "Arrow".into(),
-                vec![
+                Terms::from_iter([
                     Term::Compound(
                         "Compare".into(),
-                        vec![
+                        Terms::from_iter([
                             Term::Constant("==".into()),
                             Term::Compound(
                                 "Literal".into(),
-                                vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                                Terms::from_iter([
+                                    Term::Constant("Int".into()),
+                                    Term::Constant("2".into())
+                                ])
                             ),
                             Term::Compound(
                                 "Literal".into(),
-                                vec![Term::Constant("Int".into()), Term::Constant("3".into())]
+                                Terms::from_iter([
+                                    Term::Constant("Int".into()),
+                                    Term::Constant("3".into())
+                                ])
                             )
-                        ]
+                        ])
                     ),
                     Term::Compound(
                         "Compare".into(),
-                        vec![
+                        Terms::from_iter([
                             Term::Constant("==".into()),
                             Term::Compound(
                                 "Literal".into(),
-                                vec![Term::Constant("Int".into()), Term::Constant("2".into())]
+                                Terms::from_iter([
+                                    Term::Constant("Int".into()),
+                                    Term::Constant("2".into())
+                                ])
                             ),
                             Term::Compound(
                                 "Literal".into(),
-                                vec![Term::Constant("Int".into()), Term::Constant("4".into())]
+                                Terms::from_iter([
+                                    Term::Constant("Int".into()),
+                                    Term::Constant("4".into())
+                                ])
                             )
-                        ]
+                        ])
                     )
-                ]
+                ])
             ))
         )
     }
@@ -486,59 +556,65 @@ mod tests {
             ),
             Some(Term::Compound(
                 "Arrow".into(),
-                vec![
+                Terms::from_iter([
                     Term::Compound(
                         "BoolOp".into(),
-                        vec![
+                        Terms::from_iter([
                             Term::Constant("and".into()),
                             Term::Compound(
                                 "Compare".into(),
-                                vec![
+                                Terms::from_iter([
                                     Term::Constant("<=".into()),
                                     Term::Compound(
                                         "Literal".into(),
-                                        vec![
+                                        Terms::from_iter([
                                             Term::Constant("Int".into()),
                                             Term::Constant("5".into())
-                                        ]
+                                        ])
                                     ),
                                     Term::Compound(
                                         "Variable".into(),
-                                        vec![Term::Constant("i".into())]
+                                        Terms::from_iter([Term::Constant("i".into())])
                                     )
-                                ]
+                                ])
                             ),
                             Term::Compound(
                                 "Compare".into(),
-                                vec![
+                                Terms::from_iter([
                                     Term::Constant("<".into()),
                                     Term::Compound(
                                         "Variable".into(),
-                                        vec![Term::Constant("i".into())]
+                                        Terms::from_iter([Term::Constant("i".into())])
                                     ),
                                     Term::Compound(
                                         "Literal".into(),
-                                        vec![
+                                        Terms::from_iter([
                                             Term::Constant("Int".into()),
                                             Term::Constant("8".into())
-                                        ]
+                                        ])
                                     )
-                                ]
+                                ])
                             )
-                        ]
+                        ])
                     ),
                     Term::Compound(
                         "Compare".into(),
-                        vec![
+                        Terms::from_iter([
                             Term::Constant(">".into()),
-                            Term::Compound("Variable".into(), vec![Term::Constant("i".into())]),
+                            Term::Compound(
+                                "Variable".into(),
+                                Terms::from_iter([Term::Constant("i".into())])
+                            ),
                             Term::Compound(
                                 "Literal".into(),
-                                vec![Term::Constant("Int".into()), Term::Constant("6".into())]
+                                Terms::from_iter([
+                                    Term::Constant("Int".into()),
+                                    Term::Constant("6".into())
+                                ])
                             )
-                        ]
+                        ])
                     )
-                ]
+                ])
             ))
         )
     }
@@ -628,25 +704,25 @@ mod tests {
     #[test]
     fn test_verify_assert_1() {
         let stmt = &source_to_stmts("assert(2 == 2)").unwrap()[0];
-        assert_eq!(verify_assert(&[], stmt, 5), true)
+        assert_eq!(verify_assert(&Vec::new(), stmt, 5), true)
     }
 
     #[test]
     fn test_verify_assert_2() {
         let stmt = &source_to_stmts("assert(2 == 3)").unwrap()[0];
-        assert_eq!(verify_assert(&[], stmt, 5), false)
+        assert_eq!(verify_assert(&Vec::new(), stmt, 5), false)
     }
 
     #[test]
     fn test_verify_assert_3() {
         let stmt = &source_to_stmts("x = 3").unwrap()[0];
-        assert_eq!(verify_assert(&[], stmt, 5), true)
+        assert_eq!(verify_assert(&Vec::new(), stmt, 5), true)
     }
 
     #[test]
     fn test_verify_assert_4() {
         let stmt = &source_to_stmts("assert(x == 3)").unwrap()[0];
-        assert_eq!(verify_assert(&[], stmt, 5), false)
+        assert_eq!(verify_assert(&Vec::new(), stmt, 5), false)
     }
 
     #[test]
@@ -654,7 +730,7 @@ mod tests {
         let stmt = &source_to_stmts("assert(x == 3)").unwrap()[0];
         assert_eq!(
             verify_assert(
-                &[Rule::Rule(2, assert_to_term(&stmt).unwrap(), Vec::new())],
+                &vec![Rule::new(2, assert_to_term(&stmt).unwrap(), Terms::new())],
                 &stmt,
                 5
             ),
@@ -668,20 +744,20 @@ mod tests {
         let stmt_2 = &source_to_stmts("if x == 3:\n    assert(y == 3)").unwrap()[0];
         let stmt_3 = &source_to_stmts("assert(y == 3)").unwrap()[0];
         let facts = vec![
-            Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new()),
-            Rule::Rule(2, assert_to_term(stmt_2).unwrap(), Vec::new()),
-            Rule::Rule(
+            Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new()),
+            Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new()),
+            Rule::new(
                 2,
                 Term::Variable("y".into()),
-                vec![
+                Terms::from_iter([
                     Term::Compound(
                         "Arrow".into(),
-                        vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                        Terms::from_iter([Term::Variable("x".into()), Term::Variable("y".into())]),
                     ),
                     Term::Variable("x".into()),
-                ],
+                ]),
             ),
-            Rule::Rule(11, Term::Variable("x".into()), vec![]),
+            Rule::new(11, Term::Variable("x".into()), Terms::new()),
         ];
         assert_eq!(verify_assert(&facts, stmt_3, 5), true)
     }
@@ -691,19 +767,19 @@ mod tests {
         let stmt_2 = &source_to_stmts("if x == 3:\n    assert(y == 3)").unwrap()[0];
         let stmt_3 = &source_to_stmts("assert(y == 3)").unwrap()[0];
         let facts = vec![
-            Rule::Rule(2, assert_to_term(stmt_2).unwrap(), Vec::new()),
-            Rule::Rule(
+            Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new()),
+            Rule::new(
                 2,
                 Term::Variable("y".into()),
-                vec![
+                Terms::from_iter([
                     Term::Compound(
                         "Arrow".into(),
-                        vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                        Terms::from_iter([Term::Variable("x".into()), Term::Variable("y".into())]),
                     ),
                     Term::Variable("x".into()),
-                ],
+                ]),
             ),
-            Rule::Rule(11, Term::Variable("x".into()), vec![]),
+            Rule::new(11, Term::Variable("x".into()), Terms::new()),
         ];
         assert_eq!(verify_assert(&facts, stmt_3, 5), false)
     }
@@ -713,38 +789,38 @@ mod tests {
         let stmt = &source_to_stmts("assert(p == q)").unwrap()[0];
         let stmt_2 = &source_to_stmts("assert(q == p)").unwrap()[0];
         let facts = vec![
-            Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new()),
-            Rule::Rule(
+            Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new()),
+            Rule::new(
                 2,
                 Term::Compound(
                     "Compare".into(),
-                    vec![
+                    Terms::from_iter([
                         Term::Constant("==".into()),
                         Term::Variable("x".into()),
                         Term::Variable("y".into()),
-                    ],
+                    ]),
                 ),
-                vec![Term::Compound(
+                Terms::from_iter([Term::Compound(
                     "Compare".into(),
-                    vec![
+                    Terms::from_iter([
                         Term::Constant("==".into()),
                         Term::Variable("y".into()),
                         Term::Variable("x".into()),
-                    ],
-                )],
+                    ]),
+                )]),
             ),
-            Rule::Rule(
+            Rule::new(
                 2,
                 Term::Variable("y".into()),
-                vec![
+                Terms::from_iter([
                     Term::Compound(
                         "Arrow".into(),
-                        vec![Term::Variable("x".into()), Term::Variable("y".into())],
+                        Terms::from_iter([Term::Variable("x".into()), Term::Variable("y".into())]),
                     ),
                     Term::Variable("x".into()),
-                ],
+                ]),
             ),
-            Rule::Rule(11, Term::Variable("x".into()), vec![]),
+            Rule::new(11, Term::Variable("x".into()), Terms::new()),
         ];
         assert_eq!(verify_assert(&facts, stmt_2, 5), true)
     }
@@ -754,8 +830,8 @@ mod tests {
         let stmt = &source_to_stmts("assert(p == q)").unwrap()[0];
         let stmt_2 = &source_to_stmts("assert(q == p)").unwrap()[0];
         let facts = vec![
-            Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new()),
-            Rule::Rule(11, Term::Variable("x".into()), vec![]),
+            Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new()),
+            Rule::new(11, Term::Variable("x".into()), Terms::new()),
         ];
         assert_eq!(verify_assert(&facts, stmt_2, 5), false)
     }
@@ -768,14 +844,14 @@ mod tests {
         update_facts(&mut facts, stmt);
         assert_eq!(
             facts,
-            vec![Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new())]
+            vec![Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new())]
         );
         update_facts(&mut facts, &stmt_2);
         assert_eq!(
             facts,
             vec![
-                Rule::Rule(2, assert_to_term(stmt).unwrap(), Vec::new()),
-                Rule::Rule(2, assert_to_term(stmt_2).unwrap(), Vec::new())
+                Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new()),
+                Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new())
             ]
         );
     }
@@ -788,7 +864,7 @@ mod tests {
         update_facts(&mut facts, stmt);
         assert_eq!(
             facts,
-            vec![Rule::Rule(2, assert_to_term(stmt_2).unwrap(), Vec::new())]
+            vec![Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new())]
         );
     }
 
