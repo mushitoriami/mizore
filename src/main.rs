@@ -23,6 +23,10 @@ fn main() {
         process::exit(1);
     };
     for range in mizore::verify_module(&stmts, 5) {
-        eprintln!("Failed to verify the assertion:\n{}\n", &contents[range]);
+        eprintln!(
+            "Failed to verify the assertion at line {}:\n{}\n",
+            contents[0..range.start().into()].lines().count() + 1,
+            &contents[range]
+        );
     }
 }
