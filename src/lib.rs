@@ -2,6 +2,7 @@ use cosp::{Rule, Rules, Term, Terms, infer};
 use ruff_python_ast::{Expr, Number, Stmt};
 use ruff_python_parser::{parse_expression, parse_module};
 use ruff_text_size::{Ranged, TextRange};
+use std::collections::HashSet;
 
 pub fn source_to_expr(source: &str) -> Option<Expr> {
     let parsed = parse_expression(source).unwrap();
@@ -176,7 +177,7 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
     }
 }
 
-fn infer_term(term: Term, facts: &[Rule], depth: u64) -> bool {
+fn infer_term(term: Term, facts: &HashSet<Rule>, depth: u64) -> bool {
     infer(
         &Terms::from_iter([term]),
         &Rules::from_iter(facts.into_iter().cloned()),
@@ -185,18 +186,18 @@ fn infer_term(term: Term, facts: &[Rule], depth: u64) -> bool {
     .is_some()
 }
 
-fn verify_assert(facts: &[Rule], stmt: &Stmt, depth: u64) -> bool {
+fn verify_assert(facts: &HashSet<Rule>, stmt: &Stmt, depth: u64) -> bool {
     match assert_to_term(stmt) {
         Some(head) => evaluate_term_bool(&head).unwrap_or_else(|| infer_term(head, facts, depth)),
         _ => true,
     }
 }
 
-fn update_facts(facts: &mut Vec<Rule>, stmt: &Stmt) {
+fn update_facts(facts: &mut HashSet<Rule>, stmt: &Stmt) {
     if let Some(term) = assert_to_term(stmt) {
-        facts.push(Rule::new(2, term, Terms::new()))
+        facts.insert(Rule::new(2, term, Terms::new()));
     } else if let Stmt::Assign(ast) = stmt {
-        facts.push(Rule::new(
+        facts.insert(Rule::new(
             2,
             Term::Compound(
                 "Compare".into(),
@@ -207,7 +208,7 @@ fn update_facts(facts: &mut Vec<Rule>, stmt: &Stmt) {
                 ]),
             ),
             Terms::new(),
-        ))
+        ));
     }
 }
 
@@ -216,7 +217,7 @@ pub fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
         panic!()
     };
     let mut errs: Vec<TextRange> = Vec::new();
-    let mut facts = vec![
+    let mut facts = HashSet::from_iter([
         Rule::new(
             2,
             Term::Variable("y".into()),
@@ -229,7 +230,7 @@ pub fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
             ]),
         ),
         Rule::new(11, Term::Variable("x".into()), Terms::new()),
-    ];
+    ]);
     for stmt in &ast.body {
         if !verify_assert(&facts, &stmt, depth) {
             errs.push(stmt.range());
@@ -241,7 +242,7 @@ pub fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
 
 pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
     let mut errs: Vec<TextRange> = Vec::new();
-    let mut facts = vec![
+    let mut facts = HashSet::from_iter([
         Rule::new(
             2,
             Term::Compound(
@@ -273,7 +274,7 @@ pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
             ]),
         ),
         Rule::new(11, Term::Variable("x".into()), Terms::new()),
-    ];
+    ]);
     for stmt in module {
         if !verify_assert(&facts, &stmt, depth) {
             errs.push(stmt.range());
@@ -704,25 +705,25 @@ mod tests {
     #[test]
     fn test_verify_assert_1() {
         let stmt = &source_to_stmts("assert(2 == 2)").unwrap()[0];
-        assert_eq!(verify_assert(&Vec::new(), stmt, 5), true)
+        assert_eq!(verify_assert(&HashSet::new(), stmt, 5), true)
     }
 
     #[test]
     fn test_verify_assert_2() {
         let stmt = &source_to_stmts("assert(2 == 3)").unwrap()[0];
-        assert_eq!(verify_assert(&Vec::new(), stmt, 5), false)
+        assert_eq!(verify_assert(&HashSet::new(), stmt, 5), false)
     }
 
     #[test]
     fn test_verify_assert_3() {
         let stmt = &source_to_stmts("x = 3").unwrap()[0];
-        assert_eq!(verify_assert(&Vec::new(), stmt, 5), true)
+        assert_eq!(verify_assert(&HashSet::new(), stmt, 5), true)
     }
 
     #[test]
     fn test_verify_assert_4() {
         let stmt = &source_to_stmts("assert(x == 3)").unwrap()[0];
-        assert_eq!(verify_assert(&Vec::new(), stmt, 5), false)
+        assert_eq!(verify_assert(&HashSet::new(), stmt, 5), false)
     }
 
     #[test]
@@ -730,7 +731,7 @@ mod tests {
         let stmt = &source_to_stmts("assert(x == 3)").unwrap()[0];
         assert_eq!(
             verify_assert(
-                &vec![Rule::new(2, assert_to_term(&stmt).unwrap(), Terms::new())],
+                &HashSet::from_iter([Rule::new(2, assert_to_term(&stmt).unwrap(), Terms::new())]),
                 &stmt,
                 5
             ),
@@ -743,7 +744,7 @@ mod tests {
         let stmt = &source_to_stmts("assert(x == 3)").unwrap()[0];
         let stmt_2 = &source_to_stmts("if x == 3:\n    assert(y == 3)").unwrap()[0];
         let stmt_3 = &source_to_stmts("assert(y == 3)").unwrap()[0];
-        let facts = vec![
+        let facts = HashSet::from_iter([
             Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new()),
             Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new()),
             Rule::new(
@@ -758,7 +759,7 @@ mod tests {
                 ]),
             ),
             Rule::new(11, Term::Variable("x".into()), Terms::new()),
-        ];
+        ]);
         assert_eq!(verify_assert(&facts, stmt_3, 5), true)
     }
 
@@ -766,7 +767,7 @@ mod tests {
     fn test_verify_assert_7() {
         let stmt_2 = &source_to_stmts("if x == 3:\n    assert(y == 3)").unwrap()[0];
         let stmt_3 = &source_to_stmts("assert(y == 3)").unwrap()[0];
-        let facts = vec![
+        let facts = HashSet::from_iter([
             Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new()),
             Rule::new(
                 2,
@@ -780,7 +781,7 @@ mod tests {
                 ]),
             ),
             Rule::new(11, Term::Variable("x".into()), Terms::new()),
-        ];
+        ]);
         assert_eq!(verify_assert(&facts, stmt_3, 5), false)
     }
 
@@ -788,7 +789,7 @@ mod tests {
     fn test_verify_assert_8() {
         let stmt = &source_to_stmts("assert(p == q)").unwrap()[0];
         let stmt_2 = &source_to_stmts("assert(q == p)").unwrap()[0];
-        let facts = vec![
+        let facts = HashSet::from_iter([
             Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new()),
             Rule::new(
                 2,
@@ -821,7 +822,7 @@ mod tests {
                 ]),
             ),
             Rule::new(11, Term::Variable("x".into()), Terms::new()),
-        ];
+        ]);
         assert_eq!(verify_assert(&facts, stmt_2, 5), true)
     }
 
@@ -829,10 +830,10 @@ mod tests {
     fn test_verify_assert_9() {
         let stmt = &source_to_stmts("assert(p == q)").unwrap()[0];
         let stmt_2 = &source_to_stmts("assert(q == p)").unwrap()[0];
-        let facts = vec![
+        let facts = HashSet::from_iter([
             Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new()),
             Rule::new(11, Term::Variable("x".into()), Terms::new()),
-        ];
+        ]);
         assert_eq!(verify_assert(&facts, stmt_2, 5), false)
     }
 
@@ -840,19 +841,19 @@ mod tests {
     fn test_update_facts_1() {
         let stmt = &source_to_stmts("assert(2 == 3)").unwrap()[0];
         let stmt_2 = &source_to_stmts("assert(2 == 2)").unwrap()[0];
-        let mut facts = Vec::new();
+        let mut facts = HashSet::new();
         update_facts(&mut facts, stmt);
         assert_eq!(
             facts,
-            vec![Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new())]
+            HashSet::from_iter([Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new())])
         );
         update_facts(&mut facts, &stmt_2);
         assert_eq!(
             facts,
-            vec![
+            HashSet::from_iter([
                 Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new()),
                 Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new())
-            ]
+            ])
         );
     }
 
@@ -860,11 +861,11 @@ mod tests {
     fn test_update_facts_2() {
         let stmt = &source_to_stmts("x = 3").unwrap()[0];
         let stmt_2 = &source_to_stmts("assert(x == 3)").unwrap()[0];
-        let mut facts = Vec::new();
+        let mut facts = HashSet::new();
         update_facts(&mut facts, stmt);
         assert_eq!(
             facts,
-            vec![Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new())]
+            HashSet::from_iter([Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new())])
         );
     }
 
