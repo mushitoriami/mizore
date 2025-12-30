@@ -996,4 +996,18 @@ assert(d == 1)
             ]
         );
     }
+
+    #[test]
+    fn test_verify_module_5() {
+        let source = r#"
+if a == 1:
+    assert(a == 1)
+else:
+    assert(a != 1)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            Vec::new()
+        );
+    }
 }
