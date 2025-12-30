@@ -958,4 +958,56 @@ assert(2 == z)
             ]
         );
     }
+
+    #[test]
+    fn test_verify_module_3() {
+        let source = r#"
+if a == 1:
+    assert(a == 1)
+else:
+    assert(a == 1)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            vec![TextRange::new(TextSize::new(33), TextSize::new(46))]
+        );
+    }
+
+    #[test]
+    fn test_verify_module_4() {
+        let source = r#"
+c = 1
+if d == 1:
+    a = 2
+    b = 3
+else:
+    a = 3
+    b = 3
+assert(a == 2)
+assert(b == 3)
+assert(c == 1)
+assert(d == 1)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            vec![
+                TextRange::new(TextSize::new(64), TextSize::new(78)),
+                TextRange::new(TextSize::new(109), TextSize::new(123))
+            ]
+        );
+    }
+
+    #[test]
+    fn test_verify_module_5() {
+        let source = r#"
+if a == 1:
+    assert(a == 1)
+else:
+    assert(a != 1)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            Vec::new()
+        );
+    }
 }
