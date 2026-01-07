@@ -72,7 +72,7 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
 fn assert_to_term(assert: &Stmt) -> Option<Term> {
     match assert {
         Stmt::Assert(ast) => expr_to_term(&ast.test),
-        Stmt::If(ast) => match ast.body.as_slice() {
+        Stmt::If(ast) if ast.elif_else_clauses.len() == 0 => match ast.body.as_slice() {
             [Stmt::Assert(ast_assert)] => Some(Term::Compound(
                 "Arrow".into(),
                 Terms::from_iter([expr_to_term(&ast.test)?, expr_to_term(&ast_assert.test)?]),
