@@ -273,6 +273,61 @@ pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
                 Term::Variable("x".into()),
             ]),
         ),
+        Rule::new(
+            2,
+            Term::Compound(
+                "Arrow".into(),
+                Terms::from_iter([
+                    Term::Variable("x".into()),
+                    Term::Compound(
+                        "Arrow".into(),
+                        Terms::from_iter([Term::Variable("y".into()), Term::Variable("x".into())]),
+                    ),
+                ]),
+            ),
+            Terms::new(),
+        ),
+        Rule::new(
+            2,
+            Term::Compound(
+                "Arrow".into(),
+                Terms::from_iter([
+                    Term::Compound(
+                        "Arrow".into(),
+                        Terms::from_iter([
+                            Term::Variable("x".into()),
+                            Term::Compound(
+                                "Arrow".into(),
+                                Terms::from_iter([
+                                    Term::Variable("y".into()),
+                                    Term::Variable("z".into()),
+                                ]),
+                            ),
+                        ]),
+                    ),
+                    Term::Compound(
+                        "Arrow".into(),
+                        Terms::from_iter([
+                            Term::Compound(
+                                "Arrow".into(),
+                                Terms::from_iter([
+                                    Term::Variable("x".into()),
+                                    Term::Variable("y".into()),
+                                ]),
+                            ),
+                            Term::Compound(
+                                "Arrow".into(),
+                                Terms::from_iter([
+                                    Term::Variable("x".into()),
+                                    Term::Variable("z".into()),
+                                ]),
+                            ),
+                        ]),
+                    ),
+                ]),
+            ),
+            Terms::new(),
+        ),
         Rule::new(11, Term::Variable("x".into()), Terms::new()),
     ]);
     for stmt in module {
@@ -956,6 +1011,18 @@ assert(2 == z)
                 TextRange::new(TextSize::new(37), TextSize::new(66)),
                 TextRange::new(TextSize::new(82), TextSize::new(96))
             ]
+        );
+    }
+
+    #[test]
+    fn test_verify_module_3() {
+        let source = r#"
+if x == 1:
+    assert(x == 1)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            Vec::new()
         );
     }
 }
