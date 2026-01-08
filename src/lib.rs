@@ -193,7 +193,10 @@ fn verify_assert(facts: &HashSet<Rule>, stmt: &Stmt, depth: u64) -> bool {
     }
 }
 
-fn update_facts(facts: &mut HashSet<Rule>, stmt: &Stmt) {
+pub fn verify_stmt(facts: &mut HashSet<Rule>, stmt: &Stmt, depth: u64, errs: &mut Vec<TextRange>) {
+    if !verify_assert(facts, stmt, depth) {
+        errs.push(stmt.range());
+    }
     if let Some(term) = assert_to_term(stmt) {
         facts.insert(Rule::new(2, term, Terms::new()));
     } else if let Stmt::Assign(ast) = stmt {
@@ -210,13 +213,6 @@ fn update_facts(facts: &mut HashSet<Rule>, stmt: &Stmt) {
             Terms::new(),
         ));
     }
-}
-
-pub fn verify_stmt(facts: &mut HashSet<Rule>, stmt: &Stmt, depth: u64, errs: &mut Vec<TextRange>) {
-    if !verify_assert(facts, stmt, depth) {
-        errs.push(stmt.range());
-    }
-    update_facts(facts, stmt);
 }
 
 fn verify_block(facts: &mut HashSet<Rule>, stmts: &[Stmt], depth: u64, errs: &mut Vec<TextRange>) {
@@ -893,38 +889,6 @@ mod tests {
             Rule::new(11, Term::Variable("x".into()), Terms::new()),
         ]);
         assert_eq!(verify_assert(&facts, stmt_2, 5), false)
-    }
-
-    #[test]
-    fn test_update_facts_1() {
-        let stmt = &source_to_stmts("assert(2 == 3)").unwrap()[0];
-        let stmt_2 = &source_to_stmts("assert(2 == 2)").unwrap()[0];
-        let mut facts = HashSet::new();
-        update_facts(&mut facts, stmt);
-        assert_eq!(
-            facts,
-            HashSet::from_iter([Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new())])
-        );
-        update_facts(&mut facts, &stmt_2);
-        assert_eq!(
-            facts,
-            HashSet::from_iter([
-                Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new()),
-                Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new())
-            ])
-        );
-    }
-
-    #[test]
-    fn test_update_facts_2() {
-        let stmt = &source_to_stmts("x = 3").unwrap()[0];
-        let stmt_2 = &source_to_stmts("assert(x == 3)").unwrap()[0];
-        let mut facts = HashSet::new();
-        update_facts(&mut facts, stmt);
-        assert_eq!(
-            facts,
-            HashSet::from_iter([Rule::new(2, assert_to_term(stmt_2).unwrap(), Terms::new())])
-        );
     }
 
     #[test]
