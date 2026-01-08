@@ -219,6 +219,12 @@ pub fn verify_stmt(facts: &mut HashSet<Rule>, stmt: &Stmt, depth: u64, errs: &mu
     update_facts(facts, stmt);
 }
 
+fn verify_block(facts: &mut HashSet<Rule>, stmts: &[Stmt], depth: u64, errs: &mut Vec<TextRange>) {
+    for stmt in stmts {
+        verify_stmt(facts, &stmt, depth, errs);
+    }
+}
+
 pub fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
     let Stmt::FunctionDef(ast) = function else {
         panic!()
@@ -238,12 +244,7 @@ pub fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
         ),
         Rule::new(11, Term::Variable("x".into()), Terms::new()),
     ]);
-    for stmt in &ast.body {
-        if !verify_assert(&facts, &stmt, depth) {
-            errs.push(stmt.range());
-        }
-        update_facts(&mut facts, &stmt);
-    }
+    verify_block(&mut facts, &ast.body, depth, &mut errs);
     errs
 }
 
@@ -337,12 +338,7 @@ pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
         ),
         Rule::new(11, Term::Variable("x".into()), Terms::new()),
     ]);
-    for stmt in module {
-        if !verify_assert(&facts, &stmt, depth) {
-            errs.push(stmt.range());
-        }
-        update_facts(&mut facts, &stmt);
-    }
+    verify_block(&mut facts, module, depth, &mut errs);
     errs
 }
 
@@ -974,6 +970,47 @@ x = 2
             5,
             &mut errs,
         );
+        assert_eq!(
+            facts,
+            HashSet::from_iter([Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new())])
+        );
+        assert_eq!(errs, Vec::new());
+    }
+
+    #[test]
+    fn test_verify_block_1() {
+        let stmt1 = &source_to_stmts("assert(2 == 3)").unwrap()[0];
+        let stmt2 = &source_to_stmts("assert(2 == 2)").unwrap()[0];
+        let mut facts = HashSet::new();
+        let mut errs = Vec::new();
+        let source = r#"
+assert(2 == 3)
+assert(2 == 2)
+"#;
+        verify_block(&mut facts, &source_to_stmts(source).unwrap(), 5, &mut errs);
+        assert_eq!(
+            facts,
+            HashSet::from_iter([
+                Rule::new(2, assert_to_term(stmt1).unwrap(), Terms::new()),
+                Rule::new(2, assert_to_term(stmt2).unwrap(), Terms::new())
+            ])
+        );
+        assert_eq!(
+            errs,
+            vec![TextRange::new(TextSize::new(1), TextSize::new(15))]
+        );
+    }
+
+    #[test]
+    fn test_verify_block_2() {
+        let stmt = &source_to_stmts("assert(x == 3)").unwrap()[0];
+        let mut facts = HashSet::new();
+        let mut errs = Vec::new();
+        let source = r#"
+x = 3
+assert(x == 3)
+"#;
+        verify_block(&mut facts, &source_to_stmts(source).unwrap(), 5, &mut errs);
         assert_eq!(
             facts,
             HashSet::from_iter([Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new())])
