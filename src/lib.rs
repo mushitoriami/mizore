@@ -922,21 +922,14 @@ mod tests {
 
     #[test]
     fn test_verify_stmt_2() {
-        let stmt = &source_to_stmts("assert(x == 2)").unwrap()[0];
+        let stmt1 = &source_to_stmts("x = 2").unwrap()[0];
+        let stmt2 = &source_to_stmts("assert(x == 2)").unwrap()[0];
         let mut facts = HashSet::new();
         let mut errs = Vec::new();
-        let source = r#"
-x = 2
-"#;
-        verify_stmt(
-            &mut facts,
-            &source_to_stmts(source).unwrap()[0],
-            5,
-            &mut errs,
-        );
+        verify_stmt(&mut facts, stmt1, 5, &mut errs);
         assert_eq!(
             facts,
-            HashSet::from_iter([Rule::new(2, assert_to_term(stmt).unwrap(), Terms::new())])
+            HashSet::from_iter([Rule::new(2, assert_to_term(stmt2).unwrap(), Terms::new())])
         );
         assert_eq!(errs, Vec::new());
     }
