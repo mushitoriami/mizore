@@ -221,6 +221,17 @@ pub fn verify_stmt(facts: &mut HashSet<Rule>, stmt: &Stmt, depth: u64, errs: &mu
         s.insert(Rule::new(2, expr_to_term(&ast.test).unwrap(), Terms::new()));
         verify_block(&mut s, &ast.body, depth, errs);
         let mut t = facts.clone();
+        t.insert(Rule::new(
+            2,
+            Term::Compound(
+                "UnaryOp".into(),
+                Terms::from_iter([
+                    Term::Constant("not".into()),
+                    expr_to_term(&ast.test).unwrap(),
+                ]),
+            ),
+            Terms::new(),
+        ));
         verify_block(&mut t, &ast.elif_else_clauses[0].body, depth, errs);
         let mut facts_return = HashSet::new();
         facts_return = facts_return.union(&s).cloned().collect();
@@ -1164,6 +1175,20 @@ assert(d == 1)
                 TextRange::new(TextSize::new(64), TextSize::new(78)),
                 TextRange::new(TextSize::new(109), TextSize::new(123))
             ]
+        );
+    }
+
+    #[test]
+    fn test_verify_module_6() {
+        let source = r#"
+if a == 1:
+    assert(a == 1)
+else:
+    assert(not a == 1)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            Vec::new()
         );
     }
 }
