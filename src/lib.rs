@@ -199,6 +199,16 @@ pub fn verify_stmt(facts: &mut HashSet<Rule>, stmt: &Stmt, depth: u64, errs: &mu
     }
     if let Some(term) = assert_to_term(stmt) {
         facts.insert(Rule::new(2, term, Terms::new()));
+    } else if let Stmt::If(ast) = stmt {
+        let mut s = facts.clone();
+        s.insert(Rule::new(2, expr_to_term(&ast.test).unwrap(), Terms::new()));
+        verify_block(&mut s, &ast.body, depth, errs);
+        let mut t = facts.clone();
+        verify_block(&mut t, &ast.elif_else_clauses[0].body, depth, errs);
+        let mut facts_return = HashSet::new();
+        facts_return = facts_return.union(&s).cloned().collect();
+        facts_return = facts_return.intersection(&t).cloned().collect();
+        *facts = facts_return;
     } else if let Stmt::Assign(ast) = stmt {
         facts.insert(Rule::new(
             2,
@@ -1074,6 +1084,44 @@ if x == 1:
         assert_eq!(
             verify_module(&source_to_stmts(source).unwrap(), 5),
             Vec::new()
+        );
+    }
+
+    #[test]
+    fn test_verify_module_4() {
+        let source = r#"
+if a == 1:
+    assert(a == 1)
+else:
+    assert(a == 1)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            vec![TextRange::new(TextSize::new(41), TextSize::new(55))]
+        );
+    }
+
+    #[test]
+    fn test_verify_module_5() {
+        let source = r#"
+c = 1
+if d == 1:
+    a = 2
+    b = 3
+else:
+    a = 3
+    b = 3
+assert(a == 2)
+assert(b == 3)
+assert(c == 1)
+assert(d == 1)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            vec![
+                TextRange::new(TextSize::new(64), TextSize::new(78)),
+                TextRange::new(TextSize::new(109), TextSize::new(123))
+            ]
         );
     }
 }
