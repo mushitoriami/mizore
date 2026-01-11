@@ -29,6 +29,14 @@ fn expr_to_term(expr: &Expr) -> Option<Term> {
                 None
             }
         }
+        Expr::UnaryOp(ast) => {
+            let operand_term = expr_to_term(&ast.operand)?;
+            let op_term = Term::Constant(ast.op.to_string());
+            Some(Term::Compound(
+                "UnaryOp".into(),
+                Terms::from_iter([op_term, operand_term]),
+            ))
+        }
         Expr::BinOp(ast) => {
             let left_term = expr_to_term(&ast.left)?;
             let right_term = expr_to_term(&ast.right)?;
@@ -160,6 +168,15 @@ fn evaluate_term_bool(term: &Term) -> Option<bool> {
                     "<" => Some(evaluate_term_i64(left)? < evaluate_term_i64(right)?),
                     ">=" => Some(evaluate_term_i64(left)? >= evaluate_term_i64(right)?),
                     "<=" => Some(evaluate_term_i64(left)? <= evaluate_term_i64(right)?),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }
+        Term::Compound(label, args) if label == "UnaryOp" => {
+            match Vec::from_iter(args).as_slice() {
+                [Term::Constant(label), operand] => match label.as_str() {
+                    "not" => Some(!evaluate_term_bool(operand)?),
                     _ => None,
                 },
                 _ => None,
@@ -535,6 +552,23 @@ mod tests {
     }
 
     #[test]
+    fn test_expr_to_term_8() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("not y").unwrap()),
+            Some(Term::Compound(
+                "UnaryOp".into(),
+                Terms::from_iter([
+                    Term::Constant("not".into()),
+                    Term::Compound(
+                        "Variable".into(),
+                        Terms::from_iter([Term::Constant("y".into())])
+                    ),
+                ])
+            ))
+        )
+    }
+
+    #[test]
     fn test_assert_to_term_1() {
         assert_eq!(
             assert_to_term(&source_to_stmts("assert(2 == 4)\n").unwrap()[0]),
@@ -763,6 +797,14 @@ mod tests {
             expr_to_term(&source_to_expr("1 > 5 or 3 == 3").unwrap())
                 .map(|x| evaluate_term_bool(&x)),
             Some(Some(true))
+        )
+    }
+
+    #[test]
+    fn test_evaluate_term_bool_8() {
+        assert_eq!(
+            expr_to_term(&source_to_expr("not 3 == 3").unwrap()).map(|x| evaluate_term_bool(&x)),
+            Some(Some(false))
         )
     }
 
