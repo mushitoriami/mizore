@@ -287,6 +287,30 @@ pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
     let mut facts = HashSet::from_iter([
         Rule::new(
             2,
+            Term::Variable("x".into()),
+            Terms::from_iter([Term::Compound(
+                "BoolOp".into(),
+                Terms::from_iter([
+                    Term::Constant("and".into()),
+                    Term::Variable("x".into()),
+                    Term::Variable("y".into()),
+                ]),
+            )]),
+        ),
+        Rule::new(
+            2,
+            Term::Variable("y".into()),
+            Terms::from_iter([Term::Compound(
+                "BoolOp".into(),
+                Terms::from_iter([
+                    Term::Constant("and".into()),
+                    Term::Variable("x".into()),
+                    Term::Variable("y".into()),
+                ]),
+            )]),
+        ),
+        Rule::new(
+            2,
             Term::Compound(
                 "Compare".into(),
                 Terms::from_iter([
@@ -1189,6 +1213,18 @@ else:
         assert_eq!(
             verify_module(&source_to_stmts(source).unwrap(), 5),
             Vec::new()
+        );
+    }
+
+    #[test]
+    fn test_verify_module_7() {
+        let source = r#"
+assert(a == 1 and b == 2)
+assert(a == 1)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            vec![TextRange::new(TextSize::new(1), TextSize::new(26)),]
         );
     }
 }
