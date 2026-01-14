@@ -276,7 +276,7 @@ pub fn verify_function(function: &Stmt, depth: u64) -> Vec<TextRange> {
                 Term::Variable("x".into()),
             ]),
         ),
-        Rule::new(11, Term::Variable("x".into()), Terms::new()),
+        Rule::new(depth * 2 + 1, Term::Variable("x".into()), Terms::new()),
     ]);
     verify_block(&mut facts, &ast.body, depth, &mut errs);
     errs
@@ -394,7 +394,7 @@ pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
             ),
             Terms::new(),
         ),
-        Rule::new(11, Term::Variable("x".into()), Terms::new()),
+        Rule::new(depth * 2 + 1, Term::Variable("x".into()), Terms::new()),
     ]);
     verify_block(&mut facts, module, depth, &mut errs);
     errs
