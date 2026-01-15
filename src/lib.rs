@@ -287,46 +287,64 @@ pub fn verify_module(module: &[Stmt], depth: u64) -> Vec<TextRange> {
     let mut facts = HashSet::from_iter([
         Rule::new(
             2,
-            Term::Variable("x".into()),
-            Terms::from_iter([Term::Compound(
-                "BoolOp".into(),
+            Term::Compound(
+                "Arrow".into(),
                 Terms::from_iter([
-                    Term::Constant("and".into()),
+                    Term::Compound(
+                        "BoolOp".into(),
+                        Terms::from_iter([
+                            Term::Constant("and".into()),
+                            Term::Variable("x".into()),
+                            Term::Variable("y".into()),
+                        ]),
+                    ),
                     Term::Variable("x".into()),
-                    Term::Variable("y".into()),
                 ]),
-            )]),
-        ),
-        Rule::new(
-            2,
-            Term::Variable("y".into()),
-            Terms::from_iter([Term::Compound(
-                "BoolOp".into(),
-                Terms::from_iter([
-                    Term::Constant("and".into()),
-                    Term::Variable("x".into()),
-                    Term::Variable("y".into()),
-                ]),
-            )]),
+            ),
+            Terms::new(),
         ),
         Rule::new(
             2,
             Term::Compound(
-                "Compare".into(),
+                "Arrow".into(),
                 Terms::from_iter([
-                    Term::Constant("==".into()),
-                    Term::Variable("x".into()),
+                    Term::Compound(
+                        "BoolOp".into(),
+                        Terms::from_iter([
+                            Term::Constant("and".into()),
+                            Term::Variable("x".into()),
+                            Term::Variable("y".into()),
+                        ]),
+                    ),
                     Term::Variable("y".into()),
                 ]),
             ),
-            Terms::from_iter([Term::Compound(
-                "Compare".into(),
+            Terms::new(),
+        ),
+        Rule::new(
+            2,
+            Term::Compound(
+                "Arrow".into(),
                 Terms::from_iter([
-                    Term::Constant("==".into()),
-                    Term::Variable("y".into()),
-                    Term::Variable("x".into()),
+                    Term::Compound(
+                        "Compare".into(),
+                        Terms::from_iter([
+                            Term::Constant("==".into()),
+                            Term::Variable("x".into()),
+                            Term::Variable("y".into()),
+                        ]),
+                    ),
+                    Term::Compound(
+                        "Compare".into(),
+                        Terms::from_iter([
+                            Term::Constant("==".into()),
+                            Term::Variable("y".into()),
+                            Term::Variable("x".into()),
+                        ]),
+                    ),
                 ]),
-            )]),
+            ),
+            Terms::new(),
         ),
         Rule::new(
             2,
@@ -1225,6 +1243,18 @@ assert(a == 1)
         assert_eq!(
             verify_module(&source_to_stmts(source).unwrap(), 5),
             vec![TextRange::new(TextSize::new(1), TextSize::new(26)),]
+        );
+    }
+
+    #[test]
+    fn test_verify_module_8() {
+        let source = r#"
+for i in range(p, q):
+    assert(i < q)
+"#;
+        assert_eq!(
+            verify_module(&source_to_stmts(source).unwrap(), 5),
+            Vec::new()
         );
     }
 }
