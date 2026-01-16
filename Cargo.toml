@@ -1,6 +1,6 @@
 [package]
 name = "mizore"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "A static analyzer that verifies Python asserts before execution"
 license = "MIT"
